@@ -236,7 +236,7 @@ def plotconfidbands(tdata,endata,confid_intervals, plot_legend=False):
     if plot_legend:
         plt.legend(facecolor='silver')    
 
-def ambient_ensemble(vr_map, phi, theta, starttime,
+def ambient_ensemble(vr_map, lons, lats, starttime,
                      N_ens_amb = 100,
                      simtime = 12*u.day, 
                      lat_rot_sigma = 5*np.pi/180*u.rad,
@@ -252,8 +252,8 @@ def ambient_ensemble(vr_map, phi, theta, starttime,
     Parameters
     ----------
     vrmap : NxM numpy array containing Carrington map of solar wind speeds.
-    phi : NxM numpy array of longitudes of vmap, in radians
-    theta : NxM numpy array of latitudes of vmap, in radians
+    lons : Nx1 numpy array of longitudes of vmap, in radians
+    lats : Mx1 numpy array of latitudes of vmap, in radians
     starttime : Datetime. Sets the tiem through CR
     
     N_ens_amb: Number of ensemble members to produce
@@ -277,6 +277,10 @@ def ambient_ensemble(vr_map, phi, theta, starttime,
     
 
     """
+    
+    #create the mesh grid
+    phi, theta = np.meshgrid(lons, lats, indexing = 'xy')
+    
     ntheta = len(phi[:,0])
     vr_longs = phi[int(np.floor(ntheta/2))+1,:]
     
@@ -997,33 +1001,33 @@ def sweep_ensemble_run(forecasttime, savedir =[],
     
     #set up the parameter lists
     vr_map_list = []
-    phi_list = []
-    theta_list = []
+    lon_list = []
+    lat_list = []
     filename_list = []
     run_list = []
     
     
     #load the solar wind speed maps
     if os.path.exists(wsafilepath):
-        wsa_vr_map, vr_lats, vr_longs, br_map, br_lats, br_longs, wsaphi, wsatheta, cr_fits \
+        wsa_vr_map, vr_longs, vr_lats, br_map, br_longs, br_lats, cr_fits \
             = Hin.get_WSA_maps(wsafilepath)
         vr_map_list.append(wsa_vr_map)
-        phi_list.append(wsaphi)
-        theta_list.append(wsatheta)
+        lon_list.append(vr_longs)
+        lat_list.append(vr_lats)
         filename_list.append(os.path.basename(wsafilepath))
         run_list.append('WSA')
         
     if os.path.exists(pfssfilepath):
-         pfss_vr_map, vr_lats, vr_longs, br_map, br_lats, br_longs, pfssphi, pfsstheta \
+         pfss_vr_map, vr_longs, vr_lats, br_map, br_lats, br_longs \
              = Hin.get_PFSS_maps(pfssfilepath)
          vr_map_list.append(pfss_vr_map)
-         phi_list.append(pfssphi)
-         theta_list.append(pfsstheta)
+         lon_list.append(vr_longs)
+         lat_list.append(vr_lats)
          filename_list.append(os.path.basename(pfssfilepath))
          run_list.append('PFSS')  
          
     if os.path.exists(cortomfilepath):
-         cortom_vr_map, vr_lats, vr_longs, cortomphi, cortomtheta \
+         cortom_vr_map,  vr_longs, vr_lats \
              = Hin. get_CorTom_vr_map(cortomfilepath)
              
          # CorTOm is at 8 rS. Map this out to 21.5 rS
@@ -1035,8 +1039,8 @@ def sweep_ensemble_run(forecasttime, savedir =[],
          # axs[1].pcolor(cortom_vr_map_21.value, vmin = 200, vmax=500)
         
          vr_map_list.append(cortom_vr_map_21)
-         phi_list.append(cortomphi)
-         theta_list.append(cortomtheta)
+         lon_list.append(vr_longs)
+         lat_list.append(vr_lats)
          filename_list.append(os.path.basename(cortomfilepath))
          run_list.append('CorTom') 
     #need to add dumfric reader here
@@ -1050,8 +1054,8 @@ def sweep_ensemble_run(forecasttime, savedir =[],
             #generate the ambient ensemble
             ambient_time, this_huxtinput_ambient, this_huxtoutput_ambient = \
                                  ambient_ensemble(vr_map_list[listno], 
-                                                  phi_list[listno], 
-                                                  theta_list[listno],
+                                                  lon_list[listno], 
+                                                  lat_list[listno],
                                                   starttime,
                                                   simtime = simtime,
                                                   N_ens_amb = N_ens_amb,
