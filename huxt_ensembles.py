@@ -281,9 +281,6 @@ def ambient_ensemble(vr_map, lons, lats, starttime,
     #create the mesh grid
     phi, theta = np.meshgrid(lons, lats, indexing = 'xy')
     
-    ntheta = len(phi[:,0])
-    vr_longs = phi[int(np.floor(ntheta/2))+1,:]
-    
     #get the huxt params for the start time
     cr, cr_lon_init = Hin.datetime2huxtinputs(starttime)
     
@@ -298,7 +295,7 @@ def ambient_ensemble(vr_map, lons, lats, starttime,
     #retrieve a bodies position at each model timestep:
     earth = dummymodel.get_observer('earth')
     #get Earth lat as a function of longitude (not time)
-    E_lat = np.interp(vr_longs,np.flipud(earth.lon_c),np.flipud(earth.lat_c))
+    E_lat = np.interp(lons,np.flipud(earth.lon_c),np.flipud(earth.lat_c))
     E_r = np.mean(earth.r)
     
     #find the gridcell which corresponds to this.
@@ -320,7 +317,7 @@ def ambient_ensemble(vr_map, lons, lats, starttime,
     phi128 = np.linspace(dphi/2, 2*np.pi - dphi/2, 128)
     for i in range(0, N_ens_amb):
         vr128_ensemble[i,:] = np.interp(phi128,
-                      vr_longs.value,vr_ensemble[i,:])
+                      lons.value,vr_ensemble[i,:])
         
     #==============================================================================
     #run huxt with the ambient ensemble
@@ -497,7 +494,7 @@ def cme_ensemble(huxtinput_ambient, starttime, cme_list,
 # cmearrivaltimes = cortom_cmearrivaltimes
 # cmearrivalspeeds = cortom_cmearrivalspeeds
 
-def plot_ensemble_dashboard(time, vr_map, cme_list,
+def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
                             huxtoutput_ambient, huxtoutput_cme,
                             cmearrivaltimes, cmearrivalspeeds, 
                             forecasttime,
@@ -555,12 +552,8 @@ def plot_ensemble_dashboard(time, vr_map, cme_list,
     
     
     #recreate the long and lat grid
-    nlong = len(vr_map[0,:])
-    nlat = len(vr_map[:,0])
-    dphi = 2*np.pi/nlong 
-    vr_longs = np.arange(dphi/2, 2*np.pi - dphi/2 +0.0001, dphi) * u.rad
-    dthet = np.pi/nlat 
-    vr_lats = np.arange(-np.pi/2 + dthet/2, np.pi/2 -dphi/2 +0.001, dthet) * u.rad
+    vr_longs = map_lon
+    vr_lats = map_lat
     
     #Use the HUXt ephemeris data to get Earth lat over the CR
     #========================================================
@@ -1115,6 +1108,8 @@ def sweep_ensemble_run(forecasttime, savedir =[],
     # Plot and save the individual ensemble dashboards
     for listno in range(0, len(run_list)):
         fig, axs = plot_ensemble_dashboard(ambient_time, vr_map_list[listno],
+                                           lon_list[listno], 
+                                           lat_list[listno],
                                            cme_list,
                                     huxtoutput_ambient_list[listno],
                                     huxtoutput_cme_list[listno],
