@@ -500,7 +500,7 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
                             forecasttime,
                             confid_intervals = [5, 10, 32],
                             vlims = [300,850],
-                            filename = " "):
+                            filename = " ", runname = " "):
     """
     Function to plot the ensemble dashboard
 
@@ -597,6 +597,7 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
     ax1.xaxis.set_minor_locator(mdates.DayLocator())
     ax1.grid(True, axis = 'x')
     ax1.grid(True, which = 'minor', axis = 'x')
+    ax1.set_title(runname + '-HUXt', fontsize = 16)
     
     ax2 = fig.add_subplot(gs[1, :-1])
     if n_cme >0:
@@ -1018,6 +1019,16 @@ def sweep_ensemble_run(forecasttime, savedir =[],
          lat_list.append(vr_lats)
          filename_list.append(os.path.basename(pfssfilepath))
          run_list.append('PFSS')  
+    
+    if os.path.exists(dumfricfilepath):
+         dumfric_vr_map, vr_longs, vr_lats, br_map, br_lats, br_longs \
+             = Hin.get_PFSS_maps(dumfricfilepath)
+         vr_map_list.append(dumfric_vr_map)
+         lon_list.append(vr_longs)
+         lat_list.append(vr_lats)
+         filename_list.append(os.path.basename(dumfricfilepath))
+         run_list.append('DUMFRIC')  
+         
          
     if os.path.exists(cortomfilepath):
          cortom_vr_map,  vr_longs, vr_lats \
@@ -1117,6 +1128,7 @@ def sweep_ensemble_run(forecasttime, savedir =[],
                                     cmearrivalspeeds_list[listno], 
                                     forecasttime,
                                     filename = filename_list[listno],
+                                    runname = run_list[listno],
                                     confid_intervals = confid_intervals,
                                     vlims = vlims)
         if savedir:

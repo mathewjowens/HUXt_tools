@@ -10,7 +10,7 @@ Created on Fri Jun 18 16:11:46 2021
 import os
 import datetime
 import huxt_ensembles as Hens
-
+import time
 
 
 #==============================================================================
@@ -22,7 +22,7 @@ cwd = os.path.abspath(os.path.dirname(__file__))
 wsafilepath =  os.path.join(cwd, 'data', '2022-02-24T22Z.wsa.gong.fits')
 pfssfilepath = os.path.join(cwd, 'data','windbound_b_pfss20220224.22.nc') 
 cortomfilepath = os.path.join(cwd, 'data','tomo_8.00_20220224_tomo.txt')
-dumfricfile =  ""
+dumfricfile =  os.path.join(cwd, 'data','windbound_b20220224.12.nc')
 #the cone file
 conefilepath = os.path.join(cwd, 'data', 'cone2bc_modified.in')
 
@@ -31,12 +31,13 @@ savedir = os.path.join(cwd, 'output')
 
 #==============================================================================
 
-
+start_time = time.time()
 #run the ensemble master script
 Hens.sweep_ensemble_run(forecasttime, savedir =savedir, 
                        wsafilepath = wsafilepath, pfssfilepath = pfssfilepath, 
-                       cortomfilepath = cortomfilepath, dumfricfilepath = "",
+                       cortomfilepath = cortomfilepath, dumfricfilepath = dumfricfile,
                        conefilepath = conefilepath)
+print("--- %s seconds ---" % (time.time() - start_time))
 
 
 
