@@ -232,12 +232,6 @@ def generate_HelioMAS_ensemble(cr, Nens = 500,
                                 lat_dev_sigma = lat_dev_sigma,
                                 long_dev_sigma = long_dev_sigma)
     
-    #save file if needed
-    outfilename =' HelioMAS_CR' + str(cr) +'_vin_ensemble.h5'
-    cwd = os.path.abspath(os.path.dirname(__file__))
-    #the filenames should then be generated from the forecast date
-    outfilepath =  os.path.join(cwd, 'output', outfilename)
-    
     #interpolate to 128 long bins
     vr128_ensemble = np.ones((Nens,128))  
     dphi = 2*np.pi/128
@@ -246,6 +240,11 @@ def generate_HelioMAS_ensemble(cr, Nens = 500,
         vr128_ensemble[i,:] = np.interp(phi128,
                       v_longs.value,vr_ensemble[i,:])
     
+    #save file
+    outfilename =' HelioMAS_CR' + str(cr) +'_vin_ensemble.h5'
+    cwd = os.path.abspath(os.path.dirname(__file__))
+    #the filenames should then be generated from the forecast date
+    outfilepath =  os.path.join(cwd, 'output', outfilename)
     
     h5f = h5py.File(outfilepath, 'w')
     h5f.create_dataset('Vin_ensemble', data=vr128_ensemble)
@@ -258,10 +257,7 @@ def generate_HelioMAS_ensemble(cr, Nens = 500,
     h5f.attrs['r_in_rS'] = r_in
     h5f.attrs['Carrington_rotation'] = cr
     h5f.close()    
-    
-    return
-
-    
+       
     
 #compute the percentiles
 def getconfidintervals(endata,confid_intervals):
