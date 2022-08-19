@@ -14,11 +14,12 @@ import astropy.units as u
 import pandas as pd
 import os
 import datetime
+import h5py
 
 import huxt as H
 import huxt_inputs as Hin
 
-# <codecell> Helper functions
+
 def interp2d(xi, yi, V, x, y, n_neighbour = 4):
     """
     Fast 3d interpolation on an irregular grid. Uses the K-Dimensional Tree
@@ -100,24 +101,13 @@ def interp2d(xi, yi, V, x, y, n_neighbour = 4):
     
     return Vi
 
-def _zerototwopi_(angles):
-    """
-    Function to constrain angles to the 0 - 2pi domain.
-    
-    :param angles: a numpy array of angles
-    :return: a numpy array of angles
-    """
-    twopi = 2.0 * np.pi
-    angles_out = angles
-    a = -np.floor_divide(angles_out, twopi)
-    angles_out = angles_out + (a * twopi)
-    return angles_out
 
-# <codecell> generate ensembles
+
 def generate_input_ensemble(phi, theta, vr_map, 
-                            reflats, Nens = 100, 
-                            lat_rot_sigma = 5*np.pi/180, lat_dev_sigma = 2*np.pi/180,
-                            long_dev_sigma = 2*np.pi/180):
+                            reflats, Nens = 500, 
+                            lat_rot_sigma = 5*np.pi/180*u.rad, 
+                            lat_dev_sigma = 2*np.pi/180*u.rad,
+                            long_dev_sigma = 2*np.pi/180*u.rad):
     """
     a function generate an ensemble of solar wind speed HUXt inputs from a 
     V map such as provided by PFSS, DUMFRIC, HelioMAS. The first ensemble 
@@ -172,7 +162,7 @@ def generate_input_ensemble(phi, theta, vr_map,
     #deviation - latitude - gaussian distribution
     lat_devs = np.random.normal(0.0, lat_dev_sigma.to(u.rad).value, Nens)  
     #deviation - longitude - gaussian distribution
-    long_devs = np.random.normal(0.0, lat_dev_sigma.to(u.rad).value, Nens)  
+    long_devs = np.random.normal(0.0, long_dev_sigma.to(u.rad).value, Nens)  
     
     vr_ensemble = np.ones((Nens,len(vr_longs)))
     #br_ensemble = np.ones((Nens,len(br_longs)))
@@ -183,18 +173,96 @@ def generate_input_ensemble(phi, theta, vr_map,
     #for each set of random params, generate a V long series
     for i in range(1, Nens):
         this_lat = lats_E.value + lat_rots[i] * np.sin(vr_longs.value + long_rots[i]) +lat_devs[i]
-        this_long = _zerototwopi_(vr_longs.value + long_devs[i])
+        this_long = H._zerototwopi_(vr_longs.value + long_devs[i])
         
-        v = interp2d(this_long, this_lat, vr_map, phi, theta)
+        #sort longitude into ascending order
+        order = np.argsort(this_long)
+        
+        v = interp2d(this_long[order], this_lat[order], vr_map, phi, theta)
         vr_ensemble[i,:] = v
         
        # b = interp2d(this_long, this_lat, br_map, phi, theta)
        # br_ensemble[i,:] = b
+
+       
     return vr_ensemble
 
 
-# <codecell> post-processing
+def generate_HelioMAS_ensemble(cr, Nens = 500,
+                               lat_rot_sigma = 5*np.pi/180*u.rad,
+                               lat_dev_sigma = 2*np.pi/180*u.rad,
+                               long_dev_sigma = 2*np.pi/180*u.rad):
+    
+    """
+    A function to download, read and process MAS output to produce a solar wind
+    speed ensmeble. File is saved to HUXt_tools/output
 
+    Args:
+        cr: Integer, Carrington rotation number
+        Nens: Integer, number of ensemble members to produce
+
+    Returns:
+    """
+    
+    #MAS output is at 30 rS
+    r_in = 30*u.solRad
+    #get HelioMAS data
+    v_map, v_longs, v_lats = Hin.get_MAS_vr_map(cr)
+    #create the mesh grid
+    phi, theta = np.meshgrid(v_longs, v_lats, indexing = 'xy')
+    
+    
+    
+    
+    #Use the HUXt ephemeris data to get Earth lat over the CR
+    #========================================================
+    dummymodel = H.HUXt(v_boundary=np.ones((128))*400* (u.km/u.s), simtime=27.27*u.day, 
+                      cr_num= cr, 
+                       lon_out=0.0*u.deg,
+                       r_min=r_in)
+    
+    #retrieve a bodies position at each model timestep:
+    earth = dummymodel.get_observer('earth')
+    #get Earth lat as a function of longitude (not time)
+    reflats = np.interp(v_longs,np.flipud(earth.lon_c),np.flipud(earth.lat_c))
+    
+    vr_ensemble = generate_input_ensemble(phi, theta, v_map, 
+                                reflats, Nens = Nens, 
+                                lat_rot_sigma = lat_rot_sigma, 
+                                lat_dev_sigma = lat_dev_sigma,
+                                long_dev_sigma = long_dev_sigma)
+    
+    #save file if needed
+    outfilename =' HelioMAS_CR' + str(cr) +'_vin_ensemble.h5'
+    cwd = os.path.abspath(os.path.dirname(__file__))
+    #the filenames should then be generated from the forecast date
+    outfilepath =  os.path.join(cwd, 'output', outfilename)
+    
+    #interpolate to 128 long bins
+    vr128_ensemble = np.ones((Nens,128))  
+    dphi = 2*np.pi/128
+    phi128 = np.linspace(dphi/2, 2*np.pi - dphi/2, 128)
+    for i in range(0, Nens):
+        vr128_ensemble[i,:] = np.interp(phi128,
+                      v_longs.value,vr_ensemble[i,:])
+    
+    
+    h5f = h5py.File(outfilepath, 'w')
+    h5f.create_dataset('Vin_ensemble', data=vr128_ensemble)
+           
+    h5f.attrs['lat_rot_sigma'] = lat_rot_sigma
+    h5f.attrs['lat_dev_sigma'] = lat_dev_sigma
+    h5f.attrs['long_dev_sigma'] = long_dev_sigma
+    infilepath = 'Hin.get_MAS_vrmap(cr)'  #this is used only to identify the source files. 
+    h5f.attrs['source_file'] = infilepath
+    h5f.attrs['r_in_rS'] = r_in
+    h5f.attrs['Carrington_rotation'] = cr
+    h5f.close()    
+    
+    return
+
+    
+    
 #compute the percentiles
 def getconfidintervals(endata,confid_intervals):
     L = len(endata[0,:])
@@ -1001,7 +1069,8 @@ def sweep_ensemble_run(forecasttime, savedir =[],
     run_list = []
     
     
-    #load the solar wind speed maps
+    #load the solar wind speed maps with the various bespoke readers
+    #================================================================
     if os.path.exists(wsafilepath):
         wsa_vr_map, vr_longs, vr_lats, br_map, br_longs, br_lats, cr_fits \
             = Hin.get_WSA_maps(wsafilepath)
@@ -1037,11 +1106,6 @@ def sweep_ensemble_run(forecasttime, savedir =[],
          # CorTOm is at 8 rS. Map this out to 21.5 rS
          cortom_vr_map_21 = Hin.map_vmap_inwards(cortom_vr_map, vr_lats, vr_longs, 
                                             8*u.solRad, r_in)
-         
-         # fig, axs = plt.subplots(2,1)
-         # axs[0].pcolor(cortom_vr_map.value, vmin = 200, vmax=500)
-         # axs[1].pcolor(cortom_vr_map_21.value, vmin = 200, vmax=500)
-        
          vr_map_list.append(cortom_vr_map_21)
          lon_list.append(vr_longs)
          lat_list.append(vr_lats)
@@ -1050,10 +1114,11 @@ def sweep_ensemble_run(forecasttime, savedir =[],
     #need to add dumfric reader here
     
          
-    #check if there's any data been loaded in
+    #run the ambient ensemble 
+    #==================================================================
     huxtinput_ambient_list = []
     huxtoutput_ambient_list = []
-    if run_list:
+    if run_list: # check if there's any data been loaded in
         for listno in range(0, len(run_list)):
             #generate the ambient ensemble
             ambient_time, this_huxtinput_ambient, this_huxtoutput_ambient = \
