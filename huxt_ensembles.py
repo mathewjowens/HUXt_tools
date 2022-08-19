@@ -242,7 +242,7 @@ def generate_HelioMAS_ensemble(cr, Nens = 500,
     
     #save file
     outfilename =' HelioMAS_CR' + str(cr) +'_vin_ensemble.h5'
-    cwd = os.path.abspath(os.path.dirname(__file__))
+    cwd = os.path.abspath(os.path.dirname('__file__'))
     #the filenames should then be generated from the forecast date
     outfilepath =  os.path.join(cwd, 'output', outfilename)
     
@@ -257,7 +257,6 @@ def generate_HelioMAS_ensemble(cr, Nens = 500,
     h5f.attrs['r_in_rS'] = r_in
     h5f.attrs['Carrington_rotation'] = cr
     h5f.close()    
-       
     
 #compute the percentiles
 def getconfidintervals(endata,confid_intervals):
