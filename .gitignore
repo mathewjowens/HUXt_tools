@@ -1,4 +1,17 @@
+#ignore files without extensions
+# Ignore all
+*
+# Unignore all with extensions
+!*.*
+# Unignore all dirs
+!*/
 
-__pycache__/huxt_ensembles.cpython-38.pyc
-__pycache__/huxt_ensembles.cpython-39.pyc
-__pycache__/huxt_ensembles.cpython-39.pyc
+# Compiled python modules.
+*.pyc
+
+# Pycharms .idea can be ignored
+/.idea
+
+#ipnyb checkpoints
+/code/.ipynb*
+

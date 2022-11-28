@@ -15,6 +15,7 @@ import pandas as pd
 import os
 import datetime
 import h5py
+import requests
 
 import huxt as H
 import huxt_inputs as Hin
@@ -587,7 +588,7 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
 
     """
     
-    colours = 'b','r','g','c','m','y'
+    colours = 'b','r','g','c','m','y','k','lime', 'indigo','orangered'
     
     mpl.rc("axes", labelsize=14)
     mpl.rc("ytick", labelsize=14)
@@ -610,8 +611,13 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
         id_sort = np.argsort(launch_times)
         cme_list = [cme_list[i] for i in id_sort]
     else: 
-        n_cme = 0        
-    
+        n_cme = 0    
+        
+    # #work out the CME hit probability.
+    # arrival_prob = 
+    # if n_cme>0:
+    #     for n in range(0,n_cme):
+        
     
     
     #recreate the long and lat grid
@@ -631,15 +637,18 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
     E_lat = np.interp(vr_longs,np.flipud(earth.lon_c),np.flipud(earth.lat_c))
 
     
-
-    
-    
+    #compute the CME hit fraction
+    cme_hit = np.ones((n_cme))
+    for n in range(0,n_cme):
+        cme_hit[n] = np.sum(~np.isnan(cmearrivalspeeds[:,n])) / N_ens_cme 
     
     # plot it
     #===========================================================
     fig = plt.figure(figsize = (17,10))
     gs = fig.add_gridspec(3, 3)
     
+    
+    #==================================V from ambient ensemble=================
     ax1 = fig.add_subplot(gs[0, :-1])
     plt.sca(ax1)
     plotconfidbands(time.to_datetime(),  huxtoutput_ambient, confid_intervals)
@@ -662,6 +671,7 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
     ax1.grid(True, which = 'minor', axis = 'x')
     ax1.set_title(runname + '-HUXt', fontsize = 16)
     
+    #==================================V from CME ensemble=====================
     ax2 = fig.add_subplot(gs[1, :-1])
     if n_cme >0:
         
@@ -694,18 +704,19 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
             pd_cme_arrival['CME'+str(i)] = cmearrivaltimes[:,i]
             pd_cme_arrival['CME'+str(i)+'_smooth'] = pd_cme_arrival['CME'+str(i)].rolling(10,center=True).mean()
         
+    #============================CME arrival time distributions================
     ax3 = fig.add_subplot(gs[2, :-1])
     if n_cme >0:
-        #plot the arrival time distributions
-        
         plt.sca(ax3)
         for n in range(0,n_cme):
+            cme_label = 'CME ' +str(n+1) +': ' + str(int(cme_hit[n]*100)) + ' %'
             #ax3.plot(tdata_cme.to_datetime(), cmearrivaltimes[:,n],label='CME ' +str(n+1))
-            h = ax3.plot( pd_cme_arrival['CME'+str(n)+'_smooth'] ,label='CME ' +str(n+1),
+            h = ax3.plot( pd_cme_arrival['CME'+str(n)+'_smooth'] ,label=cme_label,
                          color = colours[n], zorder = 0)
         ax3.set_ylabel( 'Ensemble density')
         ax3.axes.yaxis.set_ticks([])
         yy = plt.gca().get_ylim(); 
+        yy = [0,15]
         ax3.set_ylim(yy); ax3.set_xlim([startdate, enddate]);
         ax3.plot([forecasttime,forecasttime],yy,'silver',zorder = 2)
         #ax3.set_title('CME front arrival time (N = ' + str(N_ens_cme) + ')', fontsize = 14)
@@ -719,7 +730,7 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
         ax3.grid(True, axis = 'x')
         ax3.grid(True, which = 'minor', axis = 'x')
     
-    
+    #========================Vr map ===========================================
     ax4 = fig.add_subplot(gs[0, -1])
     pc = ax4.pcolor(vr_longs.value*180/np.pi, vr_lats.value*180/np.pi, vr_map.value, 
                shading='auto',vmin=250, vmax=750)
@@ -748,7 +759,7 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
     ax4.text(0.02,1.05,r'$V_{SW}$ [km/s]' , 
             fontsize = 14, transform=ax4.transAxes, backgroundcolor = 'w')
     
-    
+    #========================Vr map: Add CMEs==================================
     #cbar = fig.colorbar(pc, ax=ax4, orientation = 'horizontal')
     #cbar.set_label(r'V$_{SW}$')
     #plot Earth at forecast time
@@ -781,7 +792,8 @@ def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
             
             h = ax4.plot(H._zerototwopi_(pos[:,0])*180/np.pi, pos[:,1]*180/np.pi,'.')
             h[0].set_color(colours[n])
-    
+            
+    #========================CME arrival speeds================================
     ax5 = fig.add_subplot(gs[1:, -1])
     if n_cme >0:
         #plot the distributions of arrival speeds
@@ -834,7 +846,7 @@ def plot_multimodel_ensemble_dashboard(time,
 
     """
     
-    colours = 'b','r','g','c','m','y'
+    colours = 'b','r','g','c','m','y','k','lime', 'indigo','orangered'
     
     linestyles = '-', '--', ':','-.'
     
@@ -1208,3 +1220,70 @@ def sweep_ensemble_run(forecasttime, savedir =[],
         plt.savefig(fname)
     
     return 1
+
+
+def getMetOfficeWSAandCone(startdate, enddate, datadir = ''):
+    #downloads the most recent WSA output and coneCME files for a given time 
+    #window from the Met Office system. Requires an API key to be set as
+    #a system environment variable
+    #saves wsa and cone files to datadir, which defaults tot he current directory
+    #UTC date format is "%Y-%m-%dT%H:%M:%S"
+    #outputs the filepaths to the WSA and cone files
+    
+    version = 'v1'
+    api_key = os.getenv("API_KEY")
+    url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+    
+    startdatestr = startdate.strftime("%Y-%m-%dT%H:%M:%S")
+    enddatestr = enddate.strftime("%Y-%m-%dT%H:%M:%S")
+    
+    request_url = url_base + "/" + version + "/data/swc-enlil-wsa?from=" + startdatestr + "&to=" + enddatestr
+    response = requests.get(request_url,  headers={"accept" : "application/json", "apikey" : api_key })
+    
+    success = False
+    wsafilepath = ''
+    conefilepath = ''
+    model_time = ''
+    if response.status_code == 200:
+    
+        #Convert to json
+        js = response.json()
+        nfiles=len(js['data'])
+        #print('Found: ' + str(nfiles))
+        
+        
+        #get the latest file
+        i = nfiles - 1
+        found_wsa = False
+        found_cone = False
+    
+        
+        #start with the most recent file and work back in time
+        while i > 0:
+            model_time = js['data'][i]['model_run_time']
+            wsa_file_name = js['data'][i]['gong_file']
+            cone_file_name = js['data'][i]['cone_file']
+            
+            wsa_file_url = url_base + "/" + version + "/" + wsa_file_name
+            cone_file_url = url_base + "/" + version + "/" + cone_file_name
+            
+            if not found_wsa:
+                response_wsa = requests.get(wsa_file_url,  headers={ "apikey" : api_key })
+                if response_wsa.status_code == 200:
+                    wsafilepath = os.path.join(datadir, wsa_file_name)
+                    open(wsafilepath,"wb").write(response_wsa.content)
+                    found_wsa = True
+            if not found_cone: 
+                response_cone = requests.get(cone_file_url,  headers={ "apikey" : api_key })
+                if response_cone.status_code == 200:
+                    conefilepath = os.path.join(datadir, cone_file_name)
+                    open(conefilepath,"wb").write(response_cone.content)
+                    found_cone = True
+            i = i - 1
+            if found_wsa and found_wsa:
+                success = True
+                break
+    #else: 
+        #print('Found: 0')
+        
+    return success, wsafilepath, conefilepath, model_time
