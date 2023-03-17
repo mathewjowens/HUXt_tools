@@ -18,7 +18,7 @@ import huxt_ensembles as Hens
 
 
 #==============================================================================
-#forecasttime = datetime.datetime(2022,11,23,12,0,0)
+#forecasttime = datetime.datetime(2023,1,1,9,0,0)
 forecasttime = datetime.datetime.now()
 
 # set the directory of this file as the working directory
@@ -29,14 +29,15 @@ savedir = os.path.join(cwd, 'output')
 datadir = os.path.join(cwd, 'data')
 logdir  = os.path.join(cwd, 'logs')
 
+deacc = True # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
+
 #==============================================================================
 
 #create the log file
-logfile = os.path.join(logdir, 'log_forecastdate_' +  forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.log')
-
+logfile = os.path.join(logdir, 'log_forecastdate_' + forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.log')
 logger = logging.getLogger('WSA-HUXt')
 logger.setLevel(logging.DEBUG)
-# create file handler which logs even debug messages
+# create file handler which logs everything
 fh = logging.FileHandler(logfile)
 fh.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -93,7 +94,7 @@ cme_lat_sigma = 10*u.deg;            logging.info('cme_lat_sigma: ' + str(cme_la
 
 #plotting parameters
 confid_intervals = [5, 10, 32]
-vlims = [300,850]
+vlims = [300,900]
 #compute the HUXt run start date, to allow for CMEs before the forecast date
 starttime = forecasttime - datetime.timedelta(days=run_buffer_time.to(u.day).value) 
 
@@ -102,8 +103,20 @@ starttime = forecasttime - datetime.timedelta(days=run_buffer_time.to(u.day).val
 if os.path.exists(mapfilepath):
     vr_map, vr_longs, vr_lats, br_map, br_longs, br_lats, cr_fits \
         = Hin.get_WSA_maps(mapfilepath)
-    runname = 'WSA'
+    runname = 'WSA_' + model_time
     logger.info('WSA map loaded')
+    
+    if deacc:
+        #deaccelerate the WSA map from 1-AU calibrated speeds to expected 21.5 rS values
+        vr_map_deacc = vr_map.copy()
+        for nlat in range (1, len(vr_lats)):
+            vr_map_deacc[nlat,:], lon_temp = Hin.map_v_inwards(vr_map[nlat,:], 215*u.solRad, 
+                                                     vr_longs, 21.5*u.solRad)
+        runname = runname + '_deaccelerated'
+        logger.info('WSA map deaccelerated from 1 AU to 21.5 rS')
+        vr_map = vr_map_deacc
+    
+    
 else:
     logger.error('no speed map found')
         
@@ -114,7 +127,7 @@ if os.path.exists(conefilepath):
 else:
     logger.error('no cone file found')    
         
-#run the ambient ensemble 
+#run the ensembles 
 #==================================================================
 #generate the ambient ensemble
 logger.info('Running ambient ensemble')
@@ -149,7 +162,8 @@ cme_time, huxtoutput_cme, cmearrivaltimes, cmearrivalspeeds  = \
     
 #plot the dashboard
 logger.info('Generating output summary plot')
-fig, axs = Hens.plot_ensemble_dashboard(ambient_time, vr_map,
+time = ambient_time
+fig, axs = Hens.plot_ensemble_dashboard_V2(time, vr_map,
                                         vr_longs, 
                                         vr_lats,
                                         cme_list,
@@ -157,7 +171,7 @@ fig, axs = Hens.plot_ensemble_dashboard(ambient_time, vr_map,
                                         huxtoutput_cme,
                                         cmearrivaltimes,
                                         cmearrivalspeeds, 
-                                        forecasttime,
+                                        forecasttime, starttime,
                                         filename = mapfilepath,
                                         runname = runname,
                                         confid_intervals = confid_intervals,
