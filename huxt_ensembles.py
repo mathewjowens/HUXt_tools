@@ -13,6 +13,7 @@ from scipy.spatial import cKDTree
 from scipy import interpolate
 import astropy.units as u
 from astropy.time import Time, TimeDelta
+import json
 import pandas as pd
 import os
 import datetime
@@ -1034,27 +1035,31 @@ def plot_ensemble_dashboard_V2(time, vr_map, vr_longs, vr_lats, cme_list,
     titlelabcol = 'silver'
     ax1.text(0, top_row + vspace, 'Cone\nID' , fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.08, top_row + vspace, 'Hit\n %', fontsize = fsize,
+    
+    ax1.text(0.537-0.457, top_row + vspace, 'Cone CME\nTime at 21.5 $r_S$', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.129, top_row + vspace, 'Earth arrival time\n(median)', fontsize = fsize,
+    ax1.text(0.725-0.457, top_row + vspace, 'V\n[km/s]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.326, top_row + vspace, '+/-\n[hrs]', fontsize = fsize,
+    ax1.text(0.79-0.4572, top_row + vspace, 'Long\n[deg]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.387, top_row + vspace, 'V\n[km/s]', fontsize = fsize,
+    ax1.text(0.851-0.457, top_row + vspace, 'Lat\n[deg]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.445, top_row + vspace, '+/-\n[km/s]', fontsize = fsize,
+    ax1.text(0.902-0.457, top_row + vspace, 'Width\n[deg]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
     
-    ax1.text(0.537, top_row + vspace, 'Cone CME\nTime at 21.5 $r_S$', fontsize = fsize,
+    
+    ax1.text(0.08+0.457, top_row + vspace, 'Hit\n %', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.725, top_row + vspace, 'V\n[km/s]', fontsize = fsize,
+    ax1.text(0.129+0.457, top_row + vspace, 'Earth arrival time\n(median)', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.792, top_row + vspace, 'Long\n[deg]', fontsize = fsize,
+    ax1.text(0.326+0.457, top_row + vspace, '+/-\n[hrs]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.851, top_row + vspace, 'Lat\n[deg]', fontsize = fsize,
+    ax1.text(0.387+0.457, top_row + vspace, 'V\n[km/s]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
-    ax1.text(0.902, top_row + vspace, 'Width\n[deg]', fontsize = fsize,
+    ax1.text(0.445+0.457, top_row + vspace, '+/-\n[km/s]', fontsize = fsize,
              transform=ax1.transAxes, backgroundcolor = titlelabcol)
+    
+
     
     for n in range(0,n_cme):
          if cme_hit[n] > ens_den_thresh:
@@ -1074,27 +1079,30 @@ def plot_ensemble_dashboard_V2(time, vr_map, vr_longs, vr_lats, cme_list,
 
              ax1.text(0, top_row - vspace*row_num, 'CME' + str(n+1) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.08, top_row - vspace*row_num, str(int(cme_hit[n]*100)) , fontsize = fsize,
+             
+             ax1.text(0.537-0.457, top_row - vspace*row_num, datestr , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.129, top_row - vspace*row_num, arrivaldatestr , fontsize = fsize,
+             ax1.text(0.725-0.457, top_row - vspace*row_num, str(int(cme.v.value)) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.326, top_row - vspace*row_num, arrivaluncertstr , fontsize = fsize,
+             ax1.text(0.792-0.457, top_row - vspace*row_num, str(int(cme.longitude.to(u.deg).value)) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.387, top_row - vspace*row_num, str(int(cme_v_median[n])) , fontsize = fsize,
+             ax1.text(0.851-0.457, top_row - vspace*row_num, str(int(cme.latitude.to(u.deg).value)) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.450, top_row - vspace*row_num, Vuncertstr , fontsize = fsize,
+             ax1.text(0.902-0.457, top_row - vspace*row_num, str(int(cme.width.to(u.deg).value)) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
              
-             ax1.text(0.537, top_row - vspace*row_num, datestr , fontsize = fsize,
+             ax1.text(0.08+0.457, top_row - vspace*row_num, str(int(cme_hit[n]*100)) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.725, top_row - vspace*row_num, str(int(cme.v.value)) , fontsize = fsize,
+             ax1.text(0.129+0.457, top_row - vspace*row_num, arrivaldatestr , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.792, top_row - vspace*row_num, str(int(cme.longitude.to(u.deg).value)) , fontsize = fsize,
+             ax1.text(0.326+0.457, top_row - vspace*row_num, arrivaluncertstr , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.851, top_row - vspace*row_num, str(int(cme.latitude.to(u.deg).value)) , fontsize = fsize,
+             ax1.text(0.387+0.457, top_row - vspace*row_num, str(int(cme_v_median[n])) , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
-             ax1.text(0.902, top_row - vspace*row_num, str(int(cme.width.to(u.deg).value)) , fontsize = fsize,
+             ax1.text(0.450+0.457, top_row - vspace*row_num, Vuncertstr , fontsize = fsize,
                       transform=ax1.transAxes, backgroundcolor = labelcolour)
+             
+
              row_num = row_num + 1
            
     
@@ -1611,13 +1619,13 @@ def sweep_ensemble_run(forecasttime, savedir =[],
     return 1
 
 
-def getMetOfficeWSAandCone(startdate, enddate, datadir = ''):
-    #downloads the most recent WSA output and coneCME files for a given time 
+def getMetOfficeWSA(startdate, enddate, datadir = ''):
+    #downloads the most recent WSA output for a given time 
     #window from the Met Office system. Requires an API key to be set as
     #a system environment variable
-    #saves wsa and cone files to datadir, which defaults tot he current directory
-    #UTC date format is "%Y-%m-%dT%H:%M:%S"
-    #outputs the filepaths to the WSA and cone files
+    #saves WSA files to datadir, which defaults tot he current directory
+
+    #outputs the filepaths to the  WSA files
     
     version = 'v1'
     api_key = os.getenv("API_KEY")
@@ -1631,6 +1639,59 @@ def getMetOfficeWSAandCone(startdate, enddate, datadir = ''):
     
     success = False
     wsafilepath = ''
+    model_time = ''
+    if response.status_code == 200:
+    
+        #Convert to json
+        js = response.json()
+        nfiles=len(js['data'])
+        #print('Found: ' + str(nfiles))
+                
+        #get the latest file
+        i = nfiles - 1
+        found_wsa = False
+    
+        #start with the most recent file and work back in time
+        while i > 0:
+            model_time = js['data'][i]['model_run_time']
+            wsa_file_name = js['data'][i]['gong_file']
+            
+            wsa_file_url = url_base + "/" + version + "/" + wsa_file_name
+
+            
+            if not found_wsa:
+                response_wsa = requests.get(wsa_file_url,  headers={ "apikey" : api_key })
+                if response_wsa.status_code == 200:
+                    wsafilepath = os.path.join(datadir, wsa_file_name)
+                    open(wsafilepath,"wb").write(response_wsa.content)
+                    found_wsa = True
+            i = i - 1
+            if found_wsa:
+                success = True
+                break
+    #else: 
+        #print('Found: 0')
+        
+    return success, wsafilepath, model_time
+
+def getMetOfficeCone(startdate, enddate, datadir = ''):
+    #downloads the most recent coneCME files for a given time range
+    #window from the Met Office system. Requires an API key to be set as
+    #a system environment variable
+    #saves wsa and cone files to datadir, which defaults tot he current directory
+    #outputs the filepath to the cone files
+    
+    version = 'v1'
+    api_key = os.getenv("API_KEY")
+    url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+    
+    startdatestr = startdate.strftime("%Y-%m-%dT%H:%M:%S")
+    enddatestr = enddate.strftime("%Y-%m-%dT%H:%M:%S")
+    
+    request_url = url_base + "/" + version + "/data/swc-enlil-wsa?from=" + startdatestr + "&to=" + enddatestr
+    response = requests.get(request_url,  headers={"accept" : "application/json", "apikey" : api_key })
+    
+    success = False
     conefilepath = ''
     model_time = ''
     if response.status_code == 200:
@@ -1639,29 +1700,19 @@ def getMetOfficeWSAandCone(startdate, enddate, datadir = ''):
         js = response.json()
         nfiles=len(js['data'])
         #print('Found: ' + str(nfiles))
-        
-        
+                
         #get the latest file
         i = nfiles - 1
-        found_wsa = False
         found_cone = False
     
         
         #start with the most recent file and work back in time
         while i > 0:
             model_time = js['data'][i]['model_run_time']
-            wsa_file_name = js['data'][i]['gong_file']
             cone_file_name = js['data'][i]['cone_file']
             
-            wsa_file_url = url_base + "/" + version + "/" + wsa_file_name
             cone_file_url = url_base + "/" + version + "/" + cone_file_name
             
-            if not found_wsa:
-                response_wsa = requests.get(wsa_file_url,  headers={ "apikey" : api_key })
-                if response_wsa.status_code == 200:
-                    wsafilepath = os.path.join(datadir, wsa_file_name)
-                    open(wsafilepath,"wb").write(response_wsa.content)
-                    found_wsa = True
             if not found_cone: 
                 response_cone = requests.get(cone_file_url,  headers={ "apikey" : api_key })
                 if response_cone.status_code == 200:
@@ -1669,10 +1720,157 @@ def getMetOfficeWSAandCone(startdate, enddate, datadir = ''):
                     open(conefilepath,"wb").write(response_cone.content)
                     found_cone = True
             i = i - 1
-            if found_wsa and found_wsa:
+            if found_cone:
                 success = True
                 break
     #else: 
         #print('Found: 0')
         
-    return success, wsafilepath, conefilepath, model_time
+    return success, conefilepath, model_time
+
+
+def getMetOfficePFSS(startdate, enddate, datadir = ''):
+    #downloads the most recent PFSS files for a given time 
+    #window from the Met Office system. Requires an API key to be set as
+    #a system environment variable
+    #saves PFSS files to datadir, which defaults to the current directory
+    #outputs the filepaths to the PFSS file
+
+    pfssfilepath = ''
+    modeltime = ''
+    
+    api_key = os.getenv("API_KEY")
+    url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+    version = "v1"
+    request_url = url_base+'/'+version+'/output'
+    
+    #get the list of files in the pfss_latest directory
+    response = requests.get(request_url+'/list?directory=pfss_latest', \
+                     headers={"accept" : "*/*", \
+                              "apikey" : api_key}
+                              )
+    success = False
+    #extract the filenames
+    if response.ok:
+        response_dict = json.loads(response.content)
+        file_list = response_dict["objects"]
+ 
+        #extract the date info for each file
+        date_list = []
+        date_time_str = []
+        for count, filename in enumerate(file_list):
+            date_time_str.append(filename.split("pfss")[2][0:11])
+            date_list.append(datetime.datetime.strptime(date_time_str[count], '%Y%m%d.%H'))
+            
+        
+        #find the most recent date within the required date range
+        filtered_dates = [date for date in date_list if startdate <= date <= enddate]
+        
+        if filtered_dates:
+            most_recent_date = max(filtered_dates)
+            #print("Most recent date:", most_recent_date)
+        else:
+            print("No PFSS data found within date range.")
+            success = False
+            return success, pfssfilepath, modeltime
+        #get the list index
+        index = date_list.index(most_recent_date)
+        
+        #get the associated file from the API
+        response_pfss = requests.get(request_url + "?object_name=" + file_list[index]
+                                     ,  headers={ "apikey" : api_key })
+        pfss_filename = file_list[index].split("/")[1]
+        if response_pfss.status_code == 200:
+                         pfssfilepath = os.path.join(datadir, pfss_filename)
+                         url = response_pfss.content.strip(b'"').decode('utf-8')
+                         response = requests.get(url)
+
+                         # Save the file
+                         with open(pfssfilepath, 'wb') as f:
+                             f.write(response.content)
+                             
+                         success = True
+                         modeltime = date_time_str[index]
+
+    return success, pfssfilepath, modeltime
+
+# #find the HSEs in  a given ensemble member
+
+# n = 0
+# dv = 100
+# dt = 2
+# plt.figure()
+# plt.plot(time.to_datetime(), huxtoutput_cme[n,:])
+
+# clear times
+# ntimes=1;
+# for i=1:L-1
+#     event=0;
+#     for j=1:nahead
+#         if (i+j)<=L
+#             if (data(i,5)-data(i+j,5))>=deltav
+#                 times(ntimes,1)=data(i,1);
+#                 times(ntimes,2)=data(i+j,1);
+#                 event=1;
+#             end
+#         end
+#     end
+#     if event==1; ntimes=ntimes+1; end
+# end
+
+
+# %There will be mutliple references to single events in "times". merge the
+# %multiple events together.
+# clear final
+# final(1,:)=times(1,:); k=1;
+# for i=2:length(times(:,1))
+#     if (times(i,1)-final(k,2))<=gapt
+#         final(k,2)=times(i,2);
+#     else 
+#         k=k+1;
+#         final(k,:)=times(i,:);
+#     end
+# end
+
+# %find the properties of each event
+
+# %first calculate the gradients of the speed
+# clear temp vgrads
+# n=round(gradavg/res);
+# temp=data(1+n:L,:);
+# vgrads(1:L-n)=(data(1:L-n,5)-temp(:,5))/(n*res);
+# vgrads(L-n+1:L)=NaN;
+
+# for i=1:length(final(:,1))
+#     %find the start of the maximum gradient by searching +/- deltat either 
+#     %side of the boundaries
+#     if (final(i,1)-deltat) >= data(1,1)
+#         startno=stdmjd2datano(final(i,1)-deltat,data);
+#     else; startno=1; end;
+#     if final(i,2)+deltat <= data(L,1)
+#         stopno=stdmjd2datano(final(i,2)+deltat,data);
+#     else; stopno=L; end;
+#     [maxg maxgn]=max(vgrads(startno:stopno));
+#     final(i,5)=data(maxgn+startno-1,1);
+#     final(i,6)=maxg;
+    
+#     %find the maximum speed upto deltat after the end of the max gradient
+#     maxvsno=startno+maxgn-1+n; if maxvsno < 1; maxvsno=1; end;
+#     maxvfno=maxvsno+ceil(deltat/res); if maxvfno >L; maxvfno=L; end;
+#     [maxv maxvn]=min(data(maxvsno:maxvfno,5));
+#     final(i,3)=data(maxvn+maxvsno-1,1);
+#     final(i,4)=maxv;
+    
+#     %find the minimum speed upto deltat before the start of the max gradient
+#     minvfno=startno+maxgn-1-n; if minvfno>L; minvfno=L; end;
+#     minvsno=maxvsno-ceil(deltat/res); if minvsno<1; minvsno=1; end;
+#     [minv minvn]=max(data(minvsno:minvfno,5));
+#     final(i,7)=data(minvn+minvsno-1,1);
+#     final(i,8)=minv;
+    
+# end
+
+# y=final;
+
+        
+    

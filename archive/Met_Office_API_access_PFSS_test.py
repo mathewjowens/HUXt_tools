@@ -6,6 +6,18 @@ Created on Mon Jan 30 14:39:28 2023
 """
 import requests
 import os
+import json
+import numpy as np
+from datetime import datetime
+
+
+startdate = datetime(2023, 4, 4, 0)
+enddate = datetime(2023, 4, 7, 0)
+
+# set the directory of this file as the working directory
+cwd = os.path.abspath(os.path.dirname(__file__))
+#where to save the output images
+datadir = os.path.join(cwd, 'data')
 
 api_key = os.getenv("API_KEY")
 
@@ -33,7 +45,85 @@ response = requests.get(request_url+'/list_directories', \
 print(response)
 print(response.content)
 
-response3 = requests.get(request_url+"?object_name=pfss_output/windbound_b_pfss20221220.12.nc", \
+
+
+
+
+response = requests.get(request_url+'/list?directory=pfss_latest', \
+                 headers={"accept" : "*/*", \
+                          "apikey" : api_key}
+                          )
+print(response)
+print(response.content)
+
+if response.ok:
+    response_dict = json.loads(response.content)
+    file_list = response_dict["objects"]
+else:
+    print("Error:", response.status_code, response.content)
+
+
+#extract the date info for each file
+date_list = []
+for count, filename in enumerate(file_list):
+    date_time_str = filename.split("pfss")[2][0:11]
+    date_list.append(datetime.strptime(date_time_str, '%Y%m%d.%H'))
+    
+
+#find the most recent date within the required date range
+filtered_dates = [date for date in date_list if startdate <= date <= enddate]
+
+if filtered_dates:
+    most_recent_date = max(filtered_dates)
+    print("Most recent date:", most_recent_date)
+else:
+    print("No dates found.")
+#get the list index
+index = date_list.index(most_recent_date)
+
+
+
+#get the associated file from the API
+pfss_url = request_url + "?object_name=" + file_list[index]
+response_pfss = requests.get(pfss_url, headers={"accept" : "*/*", "apikey" : api_key })
+pfss_filename = file_list[index].split("/")[1]
+if response_pfss.status_code == 200:
+                 pfssfilepath = os.path.join(datadir, pfss_filename)
+                 
+                 url = response_pfss.content.strip(b'"').decode('utf-8')
+                 response = requests.get(url)
+
+                 # Save the file
+                 with open(pfssfilepath, 'wb') as f:
+                     f.write(response.content)
+                 found_pfss = True
+
+
+
+    
+# response3 = requests.get(request_url+"?object_name=pfss_latest/windbound_b_pfss20230403.11.nc", \
+#                 headers={"accept" : "*/*", \
+#                          "apikey" : api_key}
+#                          )
+# print(response3.json())
+
+import urllib.request
+
+headers = {
+    "apikey": api_key
+}
+
+req = urllib.request.Request(pfss_url, headers=headers)
+with urllib.request.urlopen(req) as response, open(pfss_filename, 'wb') as out_file:
+    data = response.read() # read the response data in memory
+    out_file.write(data) # write the data to file
+
+    
+# <codecell>
+
+
+
+response3 = requests.get(request_url+"?object_name=pfss_latest/windbound_b_pfss20230403.11.nc", \
                 headers={"accept" : "*/*", \
                          "apikey" : api_key}
                          )
@@ -62,7 +152,7 @@ url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
 startdatestr = startdate.strftime("%Y-%m-%dT%H:%M:%S")
 enddatestr = enddate.strftime("%Y-%m-%dT%H:%M:%S")
 
-request_url = url_base + "/" + version + "/output/pfss_output?from=" + startdatestr + "&to=" + enddatestr
+request_url = url_base + "/" + version + "/output/pfss_latest?from=" + startdatestr + "&to=" + enddatestr
 response = requests.get(request_url,  headers={"accept" : "*/*", 
                                                "apikey" : api_key })
 
