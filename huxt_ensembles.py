@@ -19,6 +19,7 @@ import os
 import datetime
 import h5py
 import requests
+import pickle
 
 
 import huxt as H
@@ -880,7 +881,8 @@ def plot_ensemble_dashboard_V2(time, vr_map, vr_longs, vr_lats, cme_list,
         id_sort = np.argsort(launch_times)
         cme_list = [cme_list[i] for i in id_sort]
     else: 
-        n_cme = 0    
+        n_cme = 0 
+        N_ens_cme = 0
          
     
     #Use the HUXt ephemeris data to get Earth lat over the CR
@@ -966,11 +968,16 @@ def plot_ensemble_dashboard_V2(time, vr_map, vr_longs, vr_lats, cme_list,
     ax2.set_ylim(yy)
     ax2.set_xlim([startdate, enddate]); 
   
-    
-    plotconfidbands(time.to_datetime(), huxtoutput_cme, confid_intervals)
-    h1 = ax2.plot(time.to_datetime(), huxtoutput_cme[0,:],'k',label='Unperturbed CME', zorder = 1)
     h2 = ax2.plot(time.to_datetime(), huxtoutput_ambient[0,:],'k--',label='Unperturbed SW', zorder = 1)
     
+    if n_cme >1:
+        plotconfidbands(time.to_datetime(), huxtoutput_cme, confid_intervals)
+        h1 = ax2.plot(time.to_datetime(), huxtoutput_cme[0,:],'k',label='Unperturbed CME', zorder = 1)
+        ax2.legend(handles = [h2[0], h1[0]], facecolor=labelcolour, loc = 'upper right', 
+                   framealpha=1, ncol=1)
+    else:
+        plotconfidbands(time.to_datetime(), huxtoutput_ambient, confid_intervals)
+
 
     ax2.set_ylabel(r'V$_{SW}$ [km/s]')
     #ax2.set_title('Ambient + CMEs (N = ' + str(N_ens_cme) + ')', fontsize = 14)
@@ -981,9 +988,7 @@ def plot_ensemble_dashboard_V2(time, vr_map, vr_longs, vr_lats, cme_list,
     ax2.fill_between([startdate, forecasttime], [yy[0], yy[0]], [yy[1], yy[1]], 
                      color = 'silver', zorder = 2, alpha = 0.7)
     
-    ax2.legend(handles = [h2[0], h1[0]], facecolor=labelcolour, loc = 'upper right', 
-               framealpha=1, ncol=1)
-    
+
 
     ax2.xaxis.tick_top()
     #ax2.axes.xaxis.set_ticklabels([])
@@ -1745,7 +1750,7 @@ def getMetOfficePFSS(startdate, enddate, datadir = ''):
     request_url = url_base+'/'+version+'/output'
     
     #get the list of files in the pfss_latest directory
-    response = requests.get(request_url+'/list?directory=pfss_latest', \
+    response = requests.get(request_url+'/list?directory=pfss_results', \
                      headers={"accept" : "*/*", \
                               "apikey" : api_key}
                               )
@@ -1794,6 +1799,168 @@ def getMetOfficePFSS(startdate, enddate, datadir = ''):
 
     return success, pfssfilepath, modeltime
 
+
+
+def getMetOfficeCorTom(startdate, enddate, datadir = ''):
+    #downloads the most recent CorTom files for a given time 
+    #window from the Met Office system. Requires an API key to be set as
+    #a system environment variable
+    #saves PFSS files to datadir, which defaults to the current directory
+    #outputs the filepaths to the CorTom file
+
+    cortomfilepath = ''
+    modeltime = ''
+    
+    api_key = os.getenv("API_KEY")
+    url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+    version = "v1"
+    request_url = url_base+'/'+version+'/output'
+    
+    #get the list of files in the pfss_latest directory
+    response = requests.get(request_url+'/list?directory=cortom_results', \
+                     headers={"accept" : "*/*", \
+                              "apikey" : api_key}  )
+    success = False
+    #extract the filenames
+    if response.ok:
+        response_dict = json.loads(response.content)
+        file_list = response_dict["objects"]
+ 
+        #extract the date info for each file
+        date_list = []
+        date_time_str = []
+        for count, filename in enumerate(file_list):
+            date_time_str.append(filename.split("_")[3][0:8])
+            date_list.append(datetime.datetime.strptime(date_time_str[count], '%Y%m%d'))
+            
+        
+        #find the most recent date within the required date range
+        filtered_dates = [date for date in date_list if startdate <= date <= enddate]
+        
+        if filtered_dates:
+            most_recent_date = max(filtered_dates)
+            #print("Most recent date:", most_recent_date)
+        else:
+            print("No CorTom data found within date range.")
+            success = False
+            return success, cortomfilepath, modeltime
+        #get the list index
+        index = date_list.index(most_recent_date)
+        
+        #get the associated file from the API
+        response_cortom = requests.get(request_url + "?object_name=" + file_list[index]
+                                     ,  headers={ "apikey" : api_key })
+        cortom_filename = file_list[index].split("/")[1]
+        if response_cortom.status_code == 200:
+                         cortomfilepath = os.path.join(datadir, cortom_filename)
+                         url = response_cortom.content.strip(b'"').decode('utf-8')
+                         response = requests.get(url)
+
+                         # Save the file
+                         with open(cortomfilepath, 'wb') as f:
+                             f.write(response.content)
+                             
+                         success = True
+                         modeltime = date_time_str[index]
+
+    return success, cortomfilepath, modeltime
+
+
+
+
+def getMetOfficeDumfric(startdate, enddate, datadir = ''):
+    #downloads the most recent DUMFRIC files for a given time 
+    #window from the Met Office system. Requires an API key to be set as
+    #a system environment variable
+    #saves PFSS files to datadir, which defaults to the current directory
+    #outputs the filepaths to the DUMFRIC file
+
+    pfssfilepath = ''
+    modeltime = ''
+    
+    api_key = os.getenv("API_KEY")
+    url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+    version = "v1"
+    request_url = url_base+'/'+version+'/output'
+    
+    #get the list of files in the pfss_latest directory
+    response = requests.get(request_url+'/list?directory=dumfric_results', \
+                     headers={"accept" : "*/*", \
+                              "apikey" : api_key}
+                              )
+    success = False
+    #extract the filenames
+    if response.ok:
+        response_dict = json.loads(response.content)
+        file_list = response_dict["objects"]
+ 
+        #extract the date info for each file
+        date_list = []
+        date_time_str = []
+        for count, filename in enumerate(file_list):
+            date_time_str.append(filename.split("windbound_b")[1][0:11])
+            date_list.append(datetime.datetime.strptime(date_time_str[count], '%Y%m%d.%H'))
+            
+        
+        #find the most recent date within the required date range
+        filtered_dates = [date for date in date_list if startdate <= date <= enddate]
+        
+        if filtered_dates:
+            most_recent_date = max(filtered_dates)
+            #print("Most recent date:", most_recent_date)
+        else:
+            print("No DUMFRIC data found within date range.")
+            success = False
+            return success, pfssfilepath, modeltime
+        #get the list index
+        index = date_list.index(most_recent_date)
+        
+        #get the associated file from the API
+        response_pfss = requests.get(request_url + "?object_name=" + file_list[index]
+                                     ,  headers={ "apikey" : api_key })
+        pfss_filename = file_list[index].split("/")[1]
+        if response_pfss.status_code == 200:
+                         pfssfilepath = os.path.join(datadir, pfss_filename)
+                         url = response_pfss.content.strip(b'"').decode('utf-8')
+                         response = requests.get(url)
+
+                         # Save the file
+                         with open(pfssfilepath, 'wb') as f:
+                             f.write(response.content)
+                             
+                         success = True
+                         modeltime = date_time_str[index]
+
+    return success, pfssfilepath, modeltime
+
+def get_CorTomPKL_vr_map(filepath):
+    """
+    A function to load, read and process CorTom density output in PKL format to 
+    provide HUXt V boundary conditions as lat-long maps, 
+    Maps returned in native resolution, not HUXt resolution.
+    Maps are not transformed - make sure the CorTom maps are Carrington maps
+
+    Args:
+        filepath: String, The filepath for the CorTom.txt file
+
+    Returns:
+        vr_map: np.array, Solar wind speed as a Carrington longitude-latitude map. In km/s
+        vr_lats: np.array, The latitudes for the Vr map, in radians from trhe equator
+        vr_longs: np.array, The Carrington longitudes for the Vr map, in radians
+        phi: meshgrid og longitudes
+        theta: mesh grid of latitudes
+
+    """
+    
+    with open(filepath, "rb") as file:
+        data = pickle.load(file)
+        
+    lat = (np.pi/2 - data['colat'])*u.rad
+    lon = (np.pi + data['lon'])*u.rad
+    v = data['velocity']* u.km/u.s
+
+
+    return v.T, lon, lat
 # #find the HSEs in  a given ensemble member
 
 # n = 0

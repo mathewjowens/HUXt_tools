@@ -12,6 +12,11 @@
 # Pycharms .idea can be ignored
 /.idea
 
+# Pycharms .idea can be ignored
+/__pycache__/*.pyc
+
 #ipnyb checkpoints
 /code/.ipynb*
 
+*.pyc
+__pycache__/huxt_ensembles.cpython-39.pyc

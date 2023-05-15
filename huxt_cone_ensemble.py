@@ -14,14 +14,16 @@ import logging
 
 import huxt_inputs as Hin
 import huxt_ensembles as Hens
+import huxt as H
+import huxt_analysis as HA
 
 
 
 #==============================================================================
-#forecasttime = datetime.datetime(2023,4,5,0,0,0)
+#forecasttime = datetime.datetime(2023,4,15,1,0,0)
 forecasttime = datetime.datetime.now()
 
-cor_inputs = ['WSA', 'PFSS']
+cor_inputs = ['WSA', 'PFSS', 'Dumfric', 'CorTom']
 
 # set the directory of this file as the working directory
 cwd = os.path.abspath(os.path.dirname(__file__))
@@ -35,65 +37,83 @@ deacc = True # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 
 det_viz = True # whether to generate the deterministic visualisations
 
 #==============================================================================
+#create the log file
+logfile = os.path.join(logdir, 'log_forecastdate_' + forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.log')
+logger = logging.getLogger('HUXt_ensemble')
+logger.setLevel(logging.DEBUG)
+# create file handler which logs everything
+fh = logging.FileHandler(logfile)
+fh.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
+#===============================================================================
+#run parameters
+#==============================================================================
+#ambient ensemble parameters
+logging.info('==============Ambient Ensemble Parameters=========')
+run_buffer_time = 5*u.day;           logging.info('run_buffer_time: ' + str(run_buffer_time))
+N_ens_amb = 100;                     logging.info('N_ens_amb: ' + str(N_ens_amb))
+simtime = 12*u.day;                  logging.info('N_ens_amb: ' + str(N_ens_amb)) 
+lat_rot_sigma = 5*np.pi/180*u.rad;   logging.info('lat_rot_sigma: ' + str(lat_rot_sigma))
+lat_dev_sigma = 2*np.pi/180*u.rad;   logging.info('lat_dev_sigma: ' + str(lat_dev_sigma))
+long_dev_sigma = 2*np.pi/180*u.rad;  logging.info('long_dev_sigma: ' + str(long_dev_sigma))
+
+#ambient ensemble parameters
+logging.info('==============HUXt run Parameters=========')
+r_in = 21.5*u.solRad;                logging.info('r_in: ' + str(r_in))    
+r_out = 230*u.solRad;                logging.info('r_out: ' + str(r_out)) 
+dt_scale = 4;                        logging.info('dt_scale: ' + str(dt_scale)) 
+
+#CME ensemble parameters
+logging.info('==============CME Ensemble Parameters=========')
+N_ens_cme = 500;                     logging.info('N_ens_cme: ' + str(N_ens_cme))  
+cme_v_sigma_frac = 0.1;              logging.info('cme_v_sigma_frac: ' + str(cme_v_sigma_frac))  
+cme_width_sigma_frac = 0.1;          logging.info('cme_width_sigma_frac: ' + str(cme_width_sigma_frac))  
+cme_thick_sigma_frac = 0.1;          logging.info('cme_thick_sigma_frac: ' + str(cme_thick_sigma_frac))  
+cme_lon_sigma = 10*u.deg;            logging.info('cme_lon_sigma: ' + str(cme_lon_sigma))  
+cme_lat_sigma = 10*u.deg;            logging.info('cme_lat_sigma: ' + str(cme_lat_sigma))  
+
+#plotting parameters
+confid_intervals = [5, 10, 32]
+vlims = [300,900]
+
+#==============================================================================
+#get Met Office data for this date - assumes API is an env vairable. 
+#==============================================================================
+ndays = 2 # download data solution up to this many days prior
+sdate = forecasttime - datetime.timedelta(days=ndays)
+fdate = forecasttime
+
+#get cone files for the given dates
+success, conefilepath,  model_time = Hens.getMetOfficeCone(sdate, fdate, datadir)
+if success:
+    logger.info('Cone CME file successfully downloaded from Met Office API')
+    logger.info('Cone2bc.in timestamp: ' + str(model_time))
+    logger.info('Cone file path: ' + conefilepath)
+else:
+    logger.error('no Cone CME data returned from Met Office API')
+
+
+#compute the HUXt run start date, to allow for CMEs before the forecast date
+starttime = forecasttime - datetime.timedelta(days=run_buffer_time.to(u.day).value) 
+    
+cr, cr_lon_init = Hin.datetime2huxtinputs(starttime)
+#Use the HUXt ephemeris data to get Earth lat over the CR
+#========================================================
+dummymodel = H.HUXt(v_boundary=np.ones((128))*400* (u.km/u.s), simtime=simtime, 
+                   dt_scale=dt_scale, cr_num= cr, cr_lon_init = cr_lon_init, 
+                   lon_out=0.0*u.deg, r_min=r_in, r_max=r_out)
+#retrieve a bodies position at each model timestep:
+earth = dummymodel.get_observer('earth')
+#get average Earth lat 
+E_lat = np.nanmean (earth.lat_c)
+
+
+#loop through each coronal source
+#================================
 for cor_input in cor_inputs:
-    #create the log file
-    logfile = os.path.join(logdir, 'log_forecastdate_' + forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.log')
-    logger = logging.getLogger(cor_input + '-HUXt_ensemble')
-    logger.setLevel(logging.DEBUG)
-    # create file handler which logs everything
-    fh = logging.FileHandler(logfile)
-    fh.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-    
-    #===============================================================================
-    #run parameters
-    #==============================================================================
-    #ambient ensemble parameters
-    logging.info('==============Ambient Ensemble Parameters=========')
-    run_buffer_time = 5*u.day;           logging.info('run_buffer_time: ' + str(run_buffer_time))
-    N_ens_amb = 100;                     logging.info('N_ens_amb: ' + str(N_ens_amb))
-    simtime = 12*u.day;                  logging.info('N_ens_amb: ' + str(N_ens_amb)) 
-    lat_rot_sigma = 5*np.pi/180*u.rad;   logging.info('lat_rot_sigma: ' + str(lat_rot_sigma))
-    lat_dev_sigma = 2*np.pi/180*u.rad;   logging.info('lat_dev_sigma: ' + str(lat_dev_sigma))
-    long_dev_sigma = 2*np.pi/180*u.rad;  logging.info('long_dev_sigma: ' + str(long_dev_sigma))
-    
-    #ambient ensemble parameters
-    logging.info('==============HUXt run Parameters=========')
-    r_in = 21.5*u.solRad;                logging.info('r_in: ' + str(r_in))    
-    r_out = 230*u.solRad;                logging.info('r_out: ' + str(r_out)) 
-    dt_scale = 4;                        logging.info('dt_scale: ' + str(dt_scale)) 
-    
-    #CME ensemble parameters
-    logging.info('==============CME Ensemble Parameters=========')
-    N_ens_cme = 500;                     logging.info('N_ens_cme: ' + str(N_ens_cme))  
-    cme_v_sigma_frac = 0.1;              logging.info('cme_v_sigma_frac: ' + str(cme_v_sigma_frac))  
-    cme_width_sigma_frac = 0.1;          logging.info('cme_width_sigma_frac: ' + str(cme_width_sigma_frac))  
-    cme_thick_sigma_frac = 0.1;          logging.info('cme_thick_sigma_frac: ' + str(cme_thick_sigma_frac))  
-    cme_lon_sigma = 10*u.deg;            logging.info('cme_lon_sigma: ' + str(cme_lon_sigma))  
-    cme_lat_sigma = 10*u.deg;            logging.info('cme_lat_sigma: ' + str(cme_lat_sigma))  
-    
-    #plotting parameters
-    confid_intervals = [5, 10, 32]
-    vlims = [300,900]
-    
-    #==============================================================================
-    #get Met Office data for this date - assumes API is an env vairable. 
-    #==============================================================================
-    ndays = 2 # download data solution up to this many days prior
-    sdate = forecasttime - datetime.timedelta(days=ndays)
-    fdate = forecasttime
-    
-    #get cone files for the given dates
-    success, conefilepath,  model_time = Hens.getMetOfficeCone(sdate, fdate, datadir)
-    if success:
-        logger.info('Cone CME file successfully downloaded from Met Office API')
-        logger.info('Cone2bc.in timestamp: ' + str(model_time))
-        logger.info('Cone file path: ' + conefilepath)
-    else:
-        logger.error('no Cone CME data returned from Met Office API')
-    
     
     ambient_success = False
     if cor_input == 'WSA':
@@ -123,9 +143,16 @@ for cor_input in cor_inputs:
                 runname = runname + '_deaccelerated'
                 logger.info('WSA map deaccelerated from 1 AU to 21.5 rS')
                 vr_map = vr_map_deacc
-        
+                
+            #get the WSA values at Earth lat.
+            v_in = Hin.get_WSA_long_profile(mapfilepath, lat= E_lat)
+            if deacc:
+                #deaccelerate them?
+                v_in, lon_temp = Hin.map_v_inwards(v_in, 215*u.solRad, 
+                                                         vr_longs, r_in)
         else:
             logger.error('no WSA speed map found')   
+            
     elif cor_input == 'PFSS':
         #get PFSS solution
         success, mapfilepath, model_time = Hens.getMetOfficePFSS(sdate, fdate, datadir)
@@ -144,12 +171,84 @@ for cor_input in cor_inputs:
             logger.info('PFSS map loaded')
             ambient_success = True
             
+            #get PFSS values at Earth lat
+            v_in = Hin.get_PFSS_long_profile(mapfilepath, lat= E_lat)
+            
         else:
             logger.error('no PFSS speed map found')   
+            
+    elif cor_input == 'Dumfric':
+        #get DUMFRIC solution
+        success, mapfilepath, model_time = Hens.getMetOfficeDumfric(sdate, fdate, datadir)
+        if success:
+            logger.info('DUMFRIC file successfully downloaded from Met Office API')
+            logger.info('DUMFRIC.nc timestamp: ' + str(model_time))
+            logger.info('DUMFRIC file path: ' + mapfilepath)
+        else:
+            logger.error('no DUMFRIC data returned from Met Office API')
+           
+        #Load the DUMFRIC data
+        if os.path.exists(mapfilepath):
+            vr_map, vr_longs, vr_lats, br_map, br_longs, br_lats \
+                = Hin.get_PFSS_maps(mapfilepath)
+            runname = 'DUMFRIC' + model_time
+            logger.info('DUMFRIC map loaded')
+            ambient_success = True
+            
+            #get the DUMFRIC values at Earth lat
+            v_in = Hin.get_PFSS_long_profile(mapfilepath, lat= E_lat)
+            
+        else:
+            logger.error('no DUMFRIC speed map found')  
     
-    
-    #compute the HUXt run start date, to allow for CMEs before the forecast date
-    starttime = forecasttime - datetime.timedelta(days=run_buffer_time.to(u.day).value) 
+    elif cor_input == 'CorTom':
+        #get CorTom solution
+        success, mapfilepath, model_time = Hens.getMetOfficeCorTom(sdate, fdate, datadir)
+        if success:
+            logger.info('CorTom file successfully downloaded from Met Office API')
+            logger.info('CorTom.pkl timestamp: ' + str(model_time))
+            logger.info('CorTom file path: ' + mapfilepath)
+        else:
+            logger.error('no CorTom data returned from Met Office API')
+           
+        #Load the DUMFRIC data
+        if os.path.exists(mapfilepath):
+            vr_map, vr_longs, vr_lats = Hens.get_CorTomPKL_vr_map(mapfilepath)
+            runname = 'CorTom' + model_time
+            logger.info('CorTom map loaded')
+            ambient_success = True
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            #get the CorTom values at Earth lat
+            #v_in = Hin.get_PFSS_long_profile(mapfilepath, lat= E_lat)
+            
+        else:
+            logger.error('no CorTom speed map found')  
            
     #Load the CME parameters
     cme_success = False
@@ -158,6 +257,7 @@ for cor_input in cor_inputs:
         logger.info('Cone file loaded')
         cme_success = True
     else:
+        cme_list =[]
         logger.error('no cone file found')    
             
     #run the ensembles 
@@ -220,41 +320,15 @@ for cor_input in cor_inputs:
         fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_forecast_' +  forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.png')
         fig.savefig(fname)
         logger.info('Plot saved as ' + fname)
-        fname = os.path.join(savedir, 'plot_current.png')
+        
+        fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_forecast_latest.png')
         fig.savefig(fname)
         logger.info('Plot saved as ' + fname)
     
     
     # <codecell> Do a single deterministic run for visualisation purposes
         if det_viz:
-            import huxt as H
-            import huxt_analysis as HA
-            
-            
-            
-            cr, cr_lon_init = Hin.datetime2huxtinputs(starttime)
-            #Use the HUXt ephemeris data to get Earth lat over the CR
-            #========================================================
-            dummymodel = H.HUXt(v_boundary=np.ones((128))*400* (u.km/u.s), simtime=simtime, 
-                               dt_scale=dt_scale, cr_num= cr, cr_lon_init = cr_lon_init, 
-                               lon_out=0.0*u.deg, r_min=r_in, r_max=r_out)
-            
-            #retrieve a bodies position at each model timestep:
-            earth = dummymodel.get_observer('earth')
-            #get Earth lat as a function of longitude (not time)
-            E_lat = np.nanmean (np.interp(vr_longs,np.flipud(earth.lon_c),np.flipud(earth.lat_c)))
-            
-            if cor_input == 'WSA':
-                #get the WSA values at Earth lat.
-                v_in = Hin.get_WSA_long_profile(mapfilepath, lat= E_lat)
-                if deacc:
-                    #deaccelerate them?
-                    v_in, lon_temp = Hin.map_v_inwards(v_in, 215*u.solRad, 
-                                                             vr_longs, r_in)
-            elif cor_input == 'PFSS':
-                v_in = Hin.get_PFSS_long_profile(mapfilepath, lat= E_lat)
-            
-            
+
             model = H.HUXt(v_boundary=v_in, simtime=simtime,
                            latitude = np.mean(E_lat), cr_lon_init = cr_lon_init,
                            dt_scale=dt_scale, cr_num= cr,
@@ -270,6 +344,10 @@ for cor_input in cor_inputs:
             fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_snapshot_' +  forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.png')
             fig, ax = HA.plot(model,run_buffer_time)
             fig.savefig(fname)
-    
+            logger.info('Plot saved as ' + fname)
+            
+            fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_snapshot_latest.png')
+            fig.savefig(fname)
+            logger.info('Plot saved as ' + fname)
     
     
