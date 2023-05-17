@@ -563,6 +563,23 @@ def cme_ensemble(huxtinput_ambient, starttime, cme_list,
 # cmearrivaltimes = cortom_cmearrivaltimes
 # cmearrivalspeeds = cortom_cmearrivalspeeds
 
+def long_lat_of_circle_on_sphere(centre_lon, centre_lat, ang_radius, npoints = 100):
+    # centre_long = longitude (in rad) of circle centre
+    # centre_lat = latitude (in rad) of circle centre
+    # ang_radius = angular half width of cicle, in rad
+    
+    # Generate angles along the circumference of the minor circle
+    theta = np.linspace(0, 2*np.pi, npoints)
+    
+    # Calculate the spherical coordinates of the points on the circumference
+    latitudes = np.arcsin(np.sin(centre_lat) * np.cos(ang_radius) + 
+                          np.cos(centre_lat) * np.sin(ang_radius) * np.cos(theta))
+    longitudes = centre_lon + np.arctan2(np.sin(theta) * np.sin(ang_radius) * np.cos(centre_lat),
+                                          np.cos(ang_radius) - np.sin(centre_lat) * np.sin(latitudes))
+    
+    return longitudes, latitudes
+
+
 def plot_ensemble_dashboard(time, vr_map, map_lon, map_lat, cme_list,
                             huxtoutput_ambient, huxtoutput_cme,
                             cmearrivaltimes, cmearrivalspeeds, 
@@ -1156,27 +1173,31 @@ def plot_ensemble_dashboard_V2(time, vr_map, vr_longs, vr_lats, cme_list,
         nplot = 0
         for n, cme in enumerate(cme_list):
             
-            #ax4.plot(H._zerototwopi_(cr_lon_init_f - cme.longitude)*180/np.pi, cme.latitude*180/np.pi, 'wo')
-            stepSize = 0.1
-            #Generated vertices
-            positions = []  
-            r = cme.width.to(u.rad)/2
-            a = H._zerototwopi_(cme.longitude) *u.rad + np.pi*u.rad
-            b = cme.latitude.to(u.rad)
-            t = 0
-            while t < 2 * np.pi:
-                positions.append( ( (r * np.cos(t) + a).value,
-                                  (r * np.sin(t) + b).value ))
-                t += stepSize
-            pos = np.asarray(positions)
+            longs, lats = long_lat_of_circle_on_sphere(cme.longitude.to(u.rad).value, 
+                                                       cme.latitude.to(u.rad).value, 
+                                                       cme.width.to(u.rad).value/2)
             
-            #wrap latitudes out of range
-            mask = pos[:,1] > np.pi/2
-            pos[mask,1] = -np.pi + pos[mask,1]
-            mask = pos[:,1] < - np.pi/2
-            pos[mask,1] = np.pi + pos[mask,1]
+            # #ax4.plot(H._zerototwopi_(cr_lon_init_f - cme.longitude)*180/np.pi, cme.latitude*180/np.pi, 'wo')
+            # stepSize = 0.1
+            # #Generated vertices
+            # positions = []  
+            # r = cme.width.to(u.rad)/2
+            # a = H._zerototwopi_(cme.longitude) *u.rad + np.pi*u.rad
+            # b = cme.latitude.to(u.rad)
+            # t = 0
+            # while t < 2 * np.pi:
+            #     positions.append( ( (r * np.cos(t) + a).value,
+            #                       (r * np.sin(t) + b).value ))
+            #     t += stepSize
+            # pos = np.asarray(positions)
             
-            h = ax4.plot(H._zerototwopi_(pos[:,0])*180/np.pi, pos[:,1]*180/np.pi,'.')
+            # #wrap latitudes out of range
+            # mask = pos[:,1] > np.pi/2
+            # pos[mask,1] = -np.pi + pos[mask,1]
+            # mask = pos[:,1] < - np.pi/2
+            # pos[mask,1] = np.pi + pos[mask,1]
+            
+            h = ax4.plot(H._zerototwopi_(longs + np.pi)*180/np.pi, lats*180/np.pi,'.')
             if cme_hit[n] > ens_den_thresh:
                 h[0].set_color(colours[nplot])
                 nplot = nplot + 1
