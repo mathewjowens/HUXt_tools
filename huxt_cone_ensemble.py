@@ -11,16 +11,17 @@ import datetime
 import astropy.units as u
 import numpy as np
 import logging
+import h5py
 
 import huxt_inputs as Hin
 import huxt_ensembles as Hens
 import huxt as H
-import huxt_analysis as HA
+
 
 
 
 #==============================================================================
-#forecasttime = datetime.datetime(2023,4,15,1,0,0)
+#forecasttime = datetime.datetime(2023,5,11,12,0,0)
 forecasttime = datetime.datetime.now()
 
 cor_inputs = ['WSA', 'PFSS', 'Dumfric', 'CorTom']
@@ -33,8 +34,9 @@ savedir = os.path.join(cwd, 'output')
 datadir = os.path.join(cwd, 'data')
 logdir  = os.path.join(cwd, 'logs')
 
-deacc = True # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
-det_viz = True # whether to generate the deterministic visualisations
+deacc = True       # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
+det_viz = True    # whether to generate the deterministic visualisations
+move_to_api = False # whether to push the outputs to the API for archiving
 
 #==============================================================================
 #create the log file
@@ -114,6 +116,9 @@ E_lat = np.nanmean (earth.lat_c)
 #loop through each coronal source
 #================================
 for cor_input in cor_inputs:
+    
+    #keep a list of the files to be sent to the API
+    filelist = []
     
     ambient_success = False
     if cor_input == 'WSA':
@@ -211,41 +216,15 @@ for cor_input in cor_inputs:
         else:
             logger.error('no CorTom data returned from Met Office API')
            
-        #Load the DUMFRIC data
+        #Load the CorTom data
         if os.path.exists(mapfilepath):
             vr_map, vr_longs, vr_lats = Hens.get_CorTomPKL_vr_map(mapfilepath)
             runname = 'CorTom' + model_time
             logger.info('CorTom map loaded')
             ambient_success = True
             
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
             #get the CorTom values at Earth lat
-            #v_in = Hin.get_PFSS_long_profile(mapfilepath, lat= E_lat)
+            v_in = Hens.get_CorTom_long_profile(mapfilepath, lat= E_lat)
             
         else:
             logger.error('no CorTom speed map found')  
@@ -320,15 +299,66 @@ for cor_input in cor_inputs:
         fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_forecast_' +  forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.png')
         fig.savefig(fname)
         logger.info('Plot saved as ' + fname)
+        filelist.append(fname)
         
         fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_forecast_latest.png')
         fig.savefig(fname)
         logger.info('Plot saved as ' + fname)
-    
+        filelist.append(fname)
+        
+        #export the data as a HDF5 file
+        fname = os.path.join(savedir, 'data_' + cor_input + '-HUXt_' + forecasttime.strftime("%Y_%m_%dT%H_%M_%S") +'.h5')
+        h5f = h5py.File(fname, 'w')
+        h5f.create_dataset('huxtoutput_ambient', data=huxtoutput_ambient)
+        h5f.create_dataset('huxtoutput_cme', data=huxtoutput_cme)
+        h5f.create_dataset('cmearrivaltimes', data=cmearrivaltimes)
+        h5f.create_dataset('cmearrivalspeeds', data=cmearrivalspeeds)
+        h5f.create_dataset('starttime', data=starttime.isoformat())
+        h5f.create_dataset('inputfile', data=mapfilepath)
+        h5f.create_dataset('runname', data=runname)
+        h5f.create_dataset('vr_map', data=vr_map)
+        h5f.create_dataset('vr_longs', data=vr_longs)
+        h5f.create_dataset('vr_lats', data=vr_lats)
+        
+        # Save the Cone CME parameters to a new group.
+        allcmes = h5f.create_group('ConeCMEs')
+        for i, cme in enumerate(cme_list):
+            cme_name = "ConeCME_{:02d}".format(i)
+            cmegrp = allcmes.create_group(cme_name)
+            for k, v in cme.__dict__.items():
+                
+                if k == "frame":
+                    cmegrp.create_dataset(k, data=v)
+                    
+                if k not in ["coords", "frame"]:
+                    dset = cmegrp.create_dataset(k, data=v.value)
+                    dset.attrs['unit'] = v.unit.to_string()
+                        
+                h5f.flush()
+                # Now handle the dictionary of CME boundary coordinates coords > time_out > position
+                if k == "coords":
+                    coordgrp = cmegrp.create_group(k)
+                    for time, position in v.items():
+                        time_label = "t_out_{:03d}".format(time)
+                        timegrp = coordgrp.create_group(time_label)
+                        for pos_label, pos_data in position.items():
+                            if pos_label == 'time':
+                                timegrp.create_dataset(pos_label, data=pos_data.isot)
+                            else:
+                                dset = timegrp.create_dataset(pos_label, data=pos_data.value)
+                                dset.attrs['unit'] = pos_data.unit.to_string()
+                                
+                            h5f.flush()   
+
+        h5f.close()
+        filelist.append(fname)
+        
+        
+        
     
     # <codecell> Do a single deterministic run for visualisation purposes
         if det_viz:
-
+            import huxt_analysis as HA
             model = H.HUXt(v_boundary=v_in, simtime=simtime,
                            latitude = np.mean(E_lat), cr_lon_init = cr_lon_init,
                            dt_scale=dt_scale, cr_num= cr,
@@ -345,9 +375,14 @@ for cor_input in cor_inputs:
             fig, ax = HA.plot(model,run_buffer_time)
             fig.savefig(fname)
             logger.info('Plot saved as ' + fname)
+            filelist.append(fname)
             
             fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_snapshot_latest.png')
             fig.savefig(fname)
             logger.info('Plot saved as ' + fname)
+        
+        if move_to_api:
+            Hens.move_data_to_API(filelist)
+            logger.info('Files send to API ' + str(filelist))
     
     

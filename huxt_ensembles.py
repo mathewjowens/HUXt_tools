@@ -22,6 +22,7 @@ import requests
 import pickle
 
 
+
 import huxt as H
 import huxt_inputs as Hin
 
@@ -1982,6 +1983,40 @@ def get_CorTomPKL_vr_map(filepath):
 
 
     return v.T, lon, lat
+
+
+
+def get_CorTom_long_profile(filepath, lat=0.0 * u.deg):
+    """
+    Function to read and process CorTom output to provide a longitude profile at a specified latitude
+    of the solar wind speed for use as boundary conditions in HUXt.
+
+    Args:
+        filepath: A complete path to the CorTom data file
+        lat: Latitude at which to extract the longitudinal profile, measure up from equator. Float with units of deg
+
+    Returns:
+        vr_in: Solar wind speed as a function of Carrington longitude at solar equator.
+               Interpolated to the default HUXt longitudinal grid. np.array (NDIM = 1) in units of km/s
+    """
+    assert (lat >= -90.0 * u.deg)
+    assert (lat <= 90.0 * u.deg)
+    assert(os.path.isfile(filepath))
+
+    vr_map, lon_map, lat_map = get_CorTomPKL_vr_map(filepath)
+
+    # Extract the value at the given latitude
+    vr = np.zeros(lon_map.shape)
+    for i in range(lon_map.size):
+        vr[i] = np.interp(lat.to(u.rad).value, lat_map.to(u.rad).value, vr_map[:, i].value)
+
+    # Now interpolate on to the HUXt longitudinal grid
+    #lon, dlon, nlon = H.longitude_grid(lon_start=0.0 * u.rad, lon_stop=2 * np.pi * u.rad)
+    #vr_in = np.interp(lon.value, lon_map.value, vr) * u.km / u.s
+
+    return vr * u.km / u.s
+
+
 # #find the HSEs in  a given ensemble member
 
 # n = 0
@@ -2061,4 +2096,32 @@ def get_CorTomPKL_vr_map(filepath):
 # y=final;
 
         
+def move_data_to_API(filelist):
+      print("Moving data")
+      api_key = os.getenv("API_KEY")
     
+      url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+      version = "v1"
+    
+      request_url = url_base+'/'+version+'/output'
+    
+      print("Files:")
+      print(filelist)
+    
+      for f in filelist:
+    
+        filename = f 
+    
+        print("Transferring file: " + filename)
+    
+        data_file = open(filename, 'rb')
+      
+        response = requests.put(request_url, \
+                   params = {"object_name": os.path.basename(filename)},\
+                   headers={"apikey" : api_key},\
+                            data=data_file\
+                            )
+    
+        print(response)
+    
+      print("File transfer done.")
