@@ -1977,12 +1977,28 @@ def get_CorTomPKL_vr_map(filepath):
     with open(filepath, "rb") as file:
         data = pickle.load(file)
         
-    lat = (np.pi/2 - data['colat'])*u.rad
-    lon = (np.pi + data['lon'])*u.rad
-    v = data['velocity']* u.km/u.s
+    lat = (np.pi/2 - data['colat'])
+    lon = (data['lon'])
+    v = data['velocity']
+    
+    v = np.swapaxes(v,0,1)
+    
+    #now rotate onto a 0 to 360 grid
+    Nlon = len(lon)
+    vr_longs =  np.linspace(np.pi/Nlon, 2*np.pi-np.pi/Nlon, num=Nlon)
+    v_rot = v*np.nan
+    for nlat in range(0,len(lat)):
+        v_rot[nlat,:] = np.interp(vr_longs, lon, v[nlat,:], 
+                                  period = 2*np.pi, )
+    
+    
+    # plt.figure()
+    # plt.pcolor(lon, lat, v)
+    
+    # plt.figure()
+    # plt.pcolor(vr_longs, lat, v_rot)
 
-
-    return v.T, lon, lat
+    return v_rot*u.km/u.s, vr_longs*u.rad, lat*u.rad
 
 
 
@@ -2009,10 +2025,6 @@ def get_CorTom_long_profile(filepath, lat=0.0 * u.deg):
     vr = np.zeros(lon_map.shape)
     for i in range(lon_map.size):
         vr[i] = np.interp(lat.to(u.rad).value, lat_map.to(u.rad).value, vr_map[:, i].value)
-
-    # Now interpolate on to the HUXt longitudinal grid
-    #lon, dlon, nlon = H.longitude_grid(lon_start=0.0 * u.rad, lon_stop=2 * np.pi * u.rad)
-    #vr_in = np.interp(lon.value, lon_map.value, vr) * u.km / u.s
 
     return vr * u.km / u.s
 
