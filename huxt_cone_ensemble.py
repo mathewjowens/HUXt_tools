@@ -21,8 +21,8 @@ import huxt as H
 
 
 #==============================================================================
-forecasttime = datetime.datetime(2023,5,11,12,0,0)
-#forecasttime = datetime.datetime.now()
+#forecasttime = datetime.datetime(2023,5,11,12,0,0)
+forecasttime = datetime.datetime.now()
 
 cor_inputs = ['WSA', 'PFSS', 'Dumfric', 'CorTom']
 
@@ -35,7 +35,7 @@ datadir = os.path.join(cwd, 'data')
 logdir  = os.path.join(cwd, 'logs')
 
 deacc = True       # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
-det_viz = False    # whether to generate the deterministic visualisations
+det_viz = True    # whether to generate the deterministic visualisations
 move_to_api = False # whether to push the outputs to the API for archiving
 
 #==============================================================================
