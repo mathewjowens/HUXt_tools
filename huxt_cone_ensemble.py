@@ -23,7 +23,7 @@ def run_forecast():
     Boundary conditions incldue WSA, PFSS, Dumfric, and CorTom. 
     """
     # ==============================================================================
-    forecasttime = datetime.datetime.now()
+    forecasttime = datetime.datetime.now()   #forecasttime = datetime.datetime(2023,5,10,9)
     cor_inputs = ['WSA', 'PFSS', 'Dumfric', 'CorTom']
 
     # set the directory of this file as the working directory
@@ -34,9 +34,10 @@ def run_forecast():
     datadir = os.path.join(cwd, 'data')
     logdir = os.path.join(cwd, 'logs')
 
-    deacc = True       # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
-    det_viz = True    # whether to generate the deterministic visualisations
-    move_to_api = False  # whether to push the outputs to the API for archiving
+    deacc = True         # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
+    det_viz = True      # whether to generate the deterministic visualisations
+    
+    ndays = 2  # download coronal solutions up to this many days prior to the forecast date
 
     # ==============================================================================
     # create the log file
@@ -84,7 +85,6 @@ def run_forecast():
     # ==============================================================================
     # get Met Office data for this date - assumes API is an env vairable.
     # ==============================================================================
-    ndays = 2  # download data solution up to this many days prior
     sdate = forecasttime - datetime.timedelta(days=ndays)
     fdate = forecasttime
 
@@ -114,8 +114,6 @@ def run_forecast():
     # ================================
     for cor_input in cor_inputs:
         
-        # keep a list of the files to be sent to the API
-        filelist = []
         
         ambient_success = False
         if cor_input == 'WSA':
@@ -297,12 +295,10 @@ def run_forecast():
                                  forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.png')
             fig.savefig(fname)
             logger.info('Plot saved as ' + fname)
-            filelist.append(fname)
             
             fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_forecast_latest.png')
             fig.savefig(fname)
             logger.info('Plot saved as ' + fname)
-            filelist.append(fname)
             
             # export the data as a HDF5 file
             fname = os.path.join(savedir, 'data_' + cor_input + '-HUXt_' + forecasttime.strftime("%Y_%m_%dT%H_%M_%S")
@@ -351,7 +347,6 @@ def run_forecast():
                                 h5f.flush()
 
             h5f.close()
-            filelist.append(fname)
 
             # Do a single deterministic run for visualisation purposes
             if det_viz:
@@ -371,16 +366,25 @@ def run_forecast():
                                      forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.png')
                 fig, ax = HA.plot(model, run_buffer_time)
                 fig.savefig(fname)
-                logger.info('Plot saved as ' + fname)
-                filelist.append(fname)
+                logger.info('Snapshot plot saved as ' + fname)
                 
                 fname = os.path.join(savedir, 'plot_' + cor_input + '-HUXt_snapshot_latest.png')
                 fig.savefig(fname)
-                logger.info('Plot saved as ' + fname)
-            
-            if move_to_api:
-                Hens.move_data_to_API(filelist)
-                logger.info('Files send to API ' + str(filelist))
+                logger.info('Snapshot plot saved as ' + fname)
+                
+                #generate the movie
+                fname = os.path.join(savedir, 'movie_' + cor_input + '-HUXt_' +
+                                     forecasttime.strftime("%Y_%m_%dT%H_%M_%S") + '.mp4')
+                HA.animate(model, tag='', streaklines=None, plotHCS=False, outputfilepath=fname)
+                
+                #copy this movie to "latest"
+                latest_fname = os.path.join(savedir, 'movie_' + cor_input + '-HUXt_latest.mp4')
+                # Open original file for reading
+                with open(fname, 'rb') as src_file:
+                    # Open copied file for writing
+                    with open(latest_fname, 'wb') as dest_file:
+                        # Read the content of the original file and write it to the copied file
+                        dest_file.write(src_file.read())
         
     return
 

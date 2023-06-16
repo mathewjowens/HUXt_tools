@@ -2108,32 +2108,33 @@ def get_CorTom_long_profile(filepath, lat=0.0 * u.deg):
 # y=final;
 
         
-def move_data_to_API(filelist):
-      print("Moving data")
-      api_key = os.getenv("API_KEY")
+# def move_data_to_API(filelist):
+#       print("Moving data")
+#       api_key = os.getenv("API_KEY")
     
-      url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
-      version = "v1"
+#       url_base = "https://gateway.api-management.metoffice.cloud/swx_swimmr_s4/1.0"
+#       version = "v1"
     
-      request_url = url_base+'/'+version+'/output'
+#       request_url = url_base+'/'+version+'/output'
     
-      print("Files:")
-      print(filelist)
+#       print("Files:")
+#       print(filelist)
     
-      for f in filelist:
+#       for filepath in filelist:
     
-        filename = f 
+#         #get the filename without local directory path
+#         filename = os.path.basename(filepath)
     
-        print("Transferring file: " + filename)
+#         print("Transferring file: " + filename)
     
-        data_file = open(filename, 'rb')
+#         data_file = open(filepath, 'rb')
       
-        response = requests.put(request_url, \
-                   params = {"object_name": os.path.basename(filename)},\
-                   headers={"apikey" : api_key},\
-                            data=data_file\
-                            )
+#         response = requests.put(request_url, \
+#                    params = {"object_name": filename},\
+#                    headers={"apikey" : api_key},\
+#                             data=data_file\
+#                             )
     
-        print(response)
+#         print(response)
     
-      print("File transfer done.")
+#       print("File transfer done.")
