@@ -33,7 +33,7 @@ runname = '7 June 2012 MAS'
 bravda_ens_dir = os.environ['DBOX'] + 'python_repos\\BRaVDA\\masEns\\'
 
 #which spacecraft to assimilate. A=STERA, B=STERB, C=ACE, All are currently assumed to be at Earth lat
-obs = 'ABC'
+obs = 'BC'
 
 r_min_map = 30*u.solRad #BRaVDA and MAS inner boundary
 r_min = 5*u.solRad #map data to this location

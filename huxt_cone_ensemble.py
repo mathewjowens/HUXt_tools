@@ -23,7 +23,8 @@ def run_forecast():
     Boundary conditions incldue WSA, PFSS, Dumfric, and CorTom. 
     """
     # ==============================================================================
-    forecasttime = datetime.datetime.now()   #forecasttime = datetime.datetime(2023,5,10,9)
+    forecasttime = datetime.datetime.now()   
+    #forecasttime = datetime.datetime(2022,6,11,12)
     cor_inputs = ['WSA', 'PFSS', 'Dumfric', 'CorTom']
 
     # set the directory of this file as the working directory
@@ -35,7 +36,7 @@ def run_forecast():
     logdir = os.path.join(cwd, 'logs')
 
     deacc = True         # whether to reduce WSA speeds from 1-AU calibrated values to 21.5 rS
-    det_viz = True      # whether to generate the deterministic visualisations
+    det_viz = False      # whether to generate the deterministic visualisations
     
     ndays = 2  # download coronal solutions up to this many days prior to the forecast date
 
