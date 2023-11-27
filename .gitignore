@@ -19,4 +19,4 @@
 /code/.ipynb*
 
 *.pyc
-__pycache__/huxt_ensembles.cpython-39.pyc
+/__pycache__/

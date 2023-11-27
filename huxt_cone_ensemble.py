@@ -24,6 +24,7 @@ def run_forecast():
     """
     # ==============================================================================
     forecasttime = datetime.datetime.now()   
+    forecasttime = datetime.datetime(2023,11,9, 0)
     #forecasttime = datetime.datetime(2022,6,11,12)
     cor_inputs = ['WSA', 'PFSS', 'Dumfric', 'CorTom']
 

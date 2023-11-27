@@ -183,9 +183,10 @@ def generate_input_ensemble(phi, theta, vr_map,
         this_long = H._zerototwopi_(vr_longs.value + long_devs[i])
         
         #sort longitude into ascending order
-        order = np.argsort(this_long)
+        #order = np.argsort(this_long)
+        #v = interp2d(this_long[order], this_lat[order], vr_map, phi, theta)
         
-        v = interp2d(this_long[order], this_lat[order], vr_map, phi, theta)
+        v = interp2d(this_long, this_lat, vr_map, phi, theta)
         vr_ensemble[i,:] = v
         
        # b = interp2d(this_long, this_lat, br_map, phi, theta)

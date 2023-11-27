@@ -32,10 +32,14 @@ import huxt_ensembles as Hens
 import startBravda
 
 
-forecasttime = datetime.datetime(2022,6,11, 12)
+#forecasttime = datetime.datetime(2011,5,17, 16)
+forecasttime = datetime.datetime(2023,11,9, 0)
 
 #input data
-wsafilepath = os.environ['DBOX'] + 'python_repos\\HUXt_tools\\data\\models%2Fenlil%2F2022%2F6%2F11%2F12%2Fwsa.gong.fits'
+#wsafilepath = os.environ['DBOX'] + 'python_repos\\HUXt_tools\\data\\models%2Fenlil%2F2022%2F6%2F11%2F12%2Fwsa.gong.fits'
+wsafilepath = os.environ['DBOX'] + 'python_repos\\HUXt_tools\\data\\models%2Fenlil%2F2023%2F11%2F9%2F0%2Fwsa.gong.fits'
+
+
 conefilepath = os.environ['DBOX'] + 'python_repos\\HUXt_tools\\data\\models%2Fenlil%2F2022%2F6%2F11%2F12%2Fcone2bc.in'
 
 #bravda ensemble directory
@@ -45,7 +49,7 @@ bravda_ens_dir = os.environ['DBOX'] + 'python_repos\\BRaVDA\\masEns\\'
 output_dir = os.environ['DBOX'] + 'python_repos\\HUXt_tools\\data\\test_bravda\\'
 
 #which spacecraft to assimilate. A=STERA, B=STERB, C=ACE, All are currently assumed to be at Earth lat
-run = 'AC'#, 'C', 'B', 'BC', 'ABC'
+run = 'A'#, 'C', 'B', 'BC', 'ABC'
 DAnow = True # run the DA now. Time consuming.
 allplots = True #
 
@@ -61,7 +65,7 @@ lat_dev_sigma = 2*np.pi/180 *u.rad
 long_dev_sigma = 2*np.pi/180 *u.rad
 
 #HUXt run parameters
-deacc = True # deaccelerate the WSA to 21.5 rS map prior to making the ensemble
+deacc = True # deaccelerate the WSA to 21.5 rS map prior to making the BRaVDA ensemble and standard HUXt run
 r_min = 21.5*u.solRad
 r_max = 240*u.solRad
 simtime = 12*u.day
@@ -113,6 +117,10 @@ if deacc:
         wsa_vr_map[nlat,:], lon_temp = Hin.map_v_inwards(wsa_vr_map[nlat,:], 215*u.solRad, 
                                                  vr_longs, r_min)
     
+
+backmappedfilename = wsa_filename + '_backmapped.fits' 
+
+
 
 
 #Use the HUXt ephemeris data to get Earth lat over the CR
@@ -169,15 +177,33 @@ h5f.close()
 
 
 #also save vr128 to a .dat file for use in BRaVDA
-outEnsTxtFile = open(f'{bravda_ens_dir}customensemble.dat', 'w')
+#outEnsTxtFile = open(f'{bravda_ens_dir}customensemble.dat', 'w')
+outEnsTxtFile = os.path.join(bravda_ens_dir, 'customensemble.dat')
 np.savetxt(outEnsTxtFile, vr128_ensemble)
-outEnsTxtFile.close()
-x,y = np.meshgrid(vr_longs.value * 180/np.pi,vr_lats.value*180/np.pi)
+#outEnsTxtFile.close()
 
 if allplots:
+    
+    #get the huxt params for the start time
+    cr_forecast, cr_lon_init_forecast = Hin.datetime2huxtinputs(forecasttime)
+    
+    x,y = np.meshgrid(vr_longs.value * 180/np.pi,vr_lats.value*180/np.pi)
     plt.figure()
+    plt.subplot(2,1,1)
     plt.pcolor(x, y, wsa_vr_map.value, vmin = 250, vmax=650)
-    plt.title('Original WSA map')
+    plt.title('Original WSA map, Carrington coords')
+    plt.plot([0, 360], [E_lat.to(u.deg).value, E_lat.to(u.deg).value], 'k--')
+    plt.xlabel('Carr long')
+    
+    
+    plt.subplot(2,1,2)
+    plt.title('WSA ensemble first element')
+    plt.plot(phi128*180/np.pi, vr128_ensemble[0,:])
+    plt.plot([cr_lon_init_forecast.to(u.deg).value, cr_lon_init_forecast.to(u.deg).value],[250, 700], 'k--')
+    plt.xlabel('Carr long')
+    
+    plt.tight_layout()
+    
     
 # <codecell> Run BRaVDA
 
@@ -202,6 +228,7 @@ def _zerototwopi_(angles):
 outputpath = output_dir 
 newfilename = wsa_filename + run + '.fits' 
 
+
 #==============================================================================
 #==============================================================================
 #Run startBravda
@@ -209,29 +236,80 @@ newfilename = wsa_filename + run + '.fits'
 #==============================================================================
 
 if DAnow:
-    startBravda.bravdafunction(forecasttime, obsToUse = run, usecustomens = True,
+    startBravda.bravdafunction(forecasttime, obsToAssim = run, usecustomens = True,
                                runoutputdir = outputpath, plottimeseries = True,
                                corona = 'WSA')
+
 
 
 #read in the posterior solution to blend with the WSA map   
 #BRaVDA files are labelled with teh start time, 27 days previous
 posterior = np.loadtxt(outputpath + '\\posterior\\posterior_MJDstart' + str(fmjd-28) +'.txt')
+prior = np.loadtxt(outputpath + '\\prior\\prior_MJDstart' + str(fmjd-28) +'.txt')
+outEnsTxtFile = os.path.join(bravda_ens_dir, 'customensemble.dat')
+vr128_ensemble = np.loadtxt(outEnsTxtFile)
 
 #the inner boundary value is given as a function of time from the inition time
-post_inner = posterior[0,:]
+prior_vt = prior[0,:]
+post_vt = posterior[0,:]
+    
+
 #convert to function of longitude
-post_vlong = np.flipud(post_inner)
+post_vlong = np.flipud(post_vt)
+prior_vlong = np.flipud(prior_vt)
 #post_vlong = post_inner
 #find the associated carr_longs
 cr, cr_lon_init = Hin.datetime2huxtinputs(forecasttime)
 post_carrlongs = _zerototwopi_(phi128 + cr_lon_init.value)
+prior_carrlongs = _zerototwopi_(phi128 + cr_lon_init.value)
+
+
+
 
 #interpolate the posterior at the inner boundary to the WSA CarrLong grid
 interp = interpolate.interp1d(post_carrlongs,
                               post_vlong, kind="nearest",
                               fill_value="extrapolate")
 post_wsalongs = interp(vr_longs.value)
+
+interp = interpolate.interp1d(prior_carrlongs,
+                              prior_vlong, kind="nearest",
+                              fill_value="extrapolate")
+prior_wsalongs = interp(vr_longs.value)
+
+
+
+
+
+if allplots:
+
+    # Calculate 128 equally spaced times over the assimilation window
+    delta_time = datetime.timedelta(days=27.27)
+    times = [forecasttime - i * delta_time / 127 for i in range(128)]
+    
+    plt.figure()
+    
+    plt.subplot(3,1,1)
+    plt.title('Custom ensemble first element')
+    plt.plot(phi128*180/np.pi, vr128_ensemble[0,:])
+    plt.plot([cr_lon_init_forecast.to(u.deg).value, cr_lon_init_forecast.to(u.deg).value],[250, 700], 'k--')
+    plt.xlabel('Carr long')
+    
+    
+    plt.subplot(3,1,2)
+    plt.plot(post_vt, label = 'BRaVDA post inner boundary')
+    plt.plot(prior_vt, label = 'BRaVDA prior inner boundary')
+    plt.xlabel('?')
+    plt.legend()
+    
+    plt.subplot(3,1,3)
+    plt.plot(vr_longs.value * 180/np.pi, post_wsalongs, label = 'BRaVDA post inner boundary')
+    plt.plot(vr_longs.value * 180/np.pi, prior_wsalongs, label = 'BRaVDA prior inner boundary')
+    plt.xlabel('Carr long')
+    plt.legend()
+    
+    plt.tight_layout()
+
 
 # Now distort the WSA solution on the basis of the DA at the SS using a Gaussain filter in lat
 sigma_rad = sigma * np.pi/180
@@ -311,6 +389,111 @@ if allplots:
     plt.pcolor(x,y,vr_map_fits.value , vmin = 250, vmax=650)
     plt.title('WSA + DA of ' + run)
     plt.colorbar()
+    
+    
+    
+#also save the un-DA'd backmapped speeds
+#make a copy of the original WSA FITS file
+if not os.path.exists(output_dir + backmappedfilename):
+    shutil.copyfile(output_dir + wsa_filename + '.fits',
+                    output_dir + backmappedfilename)
+
+#modify contents of the FITS file with the new map
+hdul = fits.open(output_dir + backmappedfilename, mode = 'update')
+data = hdul[0].data
+#paste in the new data
+data[1, :, :] = new_map
+hdul[0].data = data
+hdul.flush() 
+hdul.close()
+
+# <codecell> Repeat for MAS
+
+
+# #output filepaths
+# outputpath = output_dir + 'MAS\\'
+
+
+
+# #==============================================================================
+# #==============================================================================
+# #Run startBravda
+# #==============================================================================
+# #==============================================================================
+
+# if DAnow:
+#     startBravda.bravdafunction(forecasttime, obsToUse = run, usecustomens = False,
+#                                runoutputdir = outputpath, plottimeseries = True,
+#                                corona = 'MAS')
+
+
+# #read in the posterior solution to blend with the WSA map   
+# #BRaVDA files are labelled with teh start time, 27 days previous
+# posterior = np.loadtxt(outputpath + '\\posterior\\posterior_MJDstart' + str(fmjd-27) +'.txt')
+# prior = np.loadtxt(outputpath + '\\prior\\prior_MJDstart' + str(fmjd-27) +'.txt')
+
+# outEnsTxtFile = os.path.join(bravda_ens_dir, 'customensemble.dat')
+# vr128_ensemble = np.loadtxt(outEnsTxtFile)
+
+
+# #the inner boundary value is given as a function of time from the inition time
+# prior_vt = prior[0,:]
+# post_vt = posterior[0,:]
+    
+
+# #convert to function of longitude
+# post_vlong = np.flipud(post_vt)
+# prior_vlong = np.flipud(prior_vt)
+# #post_vlong = post_inner
+# #find the associated carr_longs
+# cr, cr_lon_init = Hin.datetime2huxtinputs(forecasttime)
+# post_carrlongs = _zerototwopi_(phi128 + cr_lon_init.value)
+# prior_carrlongs = _zerototwopi_(phi128 + cr_lon_init.value)
+
+
+
+
+# #interpolate the posterior at the inner boundary to the WSA CarrLong grid
+# interp = interpolate.interp1d(post_carrlongs,
+#                               post_vlong, kind="nearest",
+#                               fill_value="extrapolate")
+# post_wsalongs = interp(vr_longs.value)
+
+# interp = interpolate.interp1d(prior_carrlongs,
+#                               prior_vlong, kind="nearest",
+#                               fill_value="extrapolate")
+# prior_wsalongs = interp(vr_longs.value)
+
+
+# if allplots:
+
+#     # Calculate 128 equally spaced times over the assimilation window
+#     delta_time = datetime.timedelta(days=27.27)
+#     times = [forecasttime - i * delta_time / 127 for i in range(128)]
+    
+#     plt.figure()
+    
+#     plt.subplot(3,1,1)
+#     plt.title('MAS ensemble first element')
+#     plt.plot(phi128*180/np.pi, vr128_ensemble[0,:])
+#     plt.plot([cr_lon_init_forecast.to(u.deg).value, cr_lon_init_forecast.to(u.deg).value],[250, 700], 'k--')
+#     plt.xlabel('Carr long')
+    
+    
+#     plt.subplot(3,1,2)
+#     plt.plot(post_vt, label = 'BRaVDA post inner boundary')
+#     plt.plot(prior_vt, label = 'BRaVDA prior inner boundary')
+#     plt.xlabel('?')
+#     plt.legend()
+    
+#     plt.subplot(3,1,3)
+#     plt.plot(vr_longs.value * 180/np.pi, post_wsalongs, label = 'BRaVDA post inner boundary')
+#     plt.plot(vr_longs.value * 180/np.pi, prior_wsalongs, label = 'BRaVDA prior inner boundary')
+#     plt.xlabel('Carr long')
+#     plt.legend()
+    
+#     plt.tight_layout()
+
 
 # <codecell> Run HUXt with the no-DA and DA WSA maps
 
@@ -346,16 +529,15 @@ cr, cr_lon_init = Hin.datetime2huxtinputs(starttime)
 for file in files:
     vr_in = Hin.get_WSA_long_profile(output_dir + file, lat = reflat.to(u.deg))
     model = H.HUXt(v_boundary=vr_in, cr_num=cr, cr_lon_init=cr_lon_init, latitude = reflat,
-                   simtime=27.27*u.day, dt_scale=4, r_min = r_min, frame = 'sidereal')
+                    simtime=27.27*u.day, dt_scale=4, r_min = r_min, frame = 'sidereal')
     model.solve([])
     earth_series = HA.get_observer_timeseries(model, observer = 'Earth')
     ax2.plot(earth_series['time'],earth_series['vsw'], label = file)
     
-    # if allplots:
-
-    #     fig2, ax = HA.plot_earth_timeseries(model, plot_omni = False)
-    #     ylims = ax[0].get_ylim()
-    #     ax[0].plot([forecasttime, forecasttime], ylims, 'b')
+    if allplots:
+        fig2, ax = HA.plot_earth_timeseries(model, plot_omni = True)
+        ylims = ax[0].get_ylim()
+        ax[0].plot([forecasttime, forecasttime], ylims, 'b')
         
 ax2.legend()
 ax2.set_ylabel(r'$V_{SW}$ (Earth) [km/s]') 
@@ -367,11 +549,11 @@ ax2.set_ylabel(r'$V_{SW}$ (Earth) [km/s]')
 for file in files:
     vr_in = Hin.get_WSA_long_profile(output_dir + file, lat = reflat.to(u.deg))
     model = H.HUXt(v_boundary=vr_in, cr_num=cr, cr_lon_init=cr_lon_init, latitude = reflat,
-                   simtime=simtime, dt_scale=4, r_min = r_min, frame = 'sidereal')
+                    simtime=simtime, dt_scale=4, r_min = r_min, frame = 'sidereal')
     cme_list = Hin.ConeFile_to_ConeCME_list(model, conefilepath)
         
     model.solve(cme_list) 
-    fig3, ax = HA.plot_earth_timeseries(model, plot_omni = False)
+    fig3, ax = HA.plot_earth_timeseries(model, plot_omni = True)
     ylims = ax[0].get_ylim()
     ax[0].plot([forecasttime, forecasttime], ylims, 'b')
     
